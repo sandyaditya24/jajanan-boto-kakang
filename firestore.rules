@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    function isValidMenuItem(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.price is number && data.price >= 0
+        && data.category is string && data.category.size() <= 50
+        && data.isAvailable is bool;
+    }
+
+    function isValidShopInfo(data) {
+      return data.shopName is string && data.shopName.size() > 0 && data.shopName.size() <= 100
+        && data.address is string && data.address.size() > 0 && data.address.size() <= 300
+        && data.whatsappNumber is string && data.whatsappNumber.size() > 0 && data.whatsappNumber.size() <= 30;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Public catalog & real-time updates for buyers and seller
+    match /menu_items/{menuId} {
+      allow read: if true;
+      allow create, update: if isValidId(menuId) && isValidMenuItem(request.resource.data);
+      allow delete: if isValidId(menuId);
+    }
+
+    // Store settings and WhatsApp contact
+    match /shop_info/{docId} {
+      allow read: if true;
+      allow create, update: if isValidId(docId) && isValidShopInfo(request.resource.data);
+      allow delete: if isValidId(docId);
+    }
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "entities": {
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "Culinary menu item available at Jajanan Kakang",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Food or beverage item name"
+        },
+        "price": {
+          "type": "number",
+          "description": "Price in Indonesian Rupiah"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Appetizing description of the dish"
+        },
+        "imageUrl": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "URL to food photo"
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Category such as Makanan Berat, Camilan, Minuman, Paket Hemat"
+        },
+        "isAvailable": {
+          "type": "boolean",
+          "description": "Stock availability status"
+        },
+        "badge": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Special badge like Best Seller, Rekomendasi, Pedas, Promo"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update ISO string"
+        }
+      },
+      "required": ["name", "price", "category", "isAvailable"]
+    },
+    "ShopInfo": {
+      "title": "ShopInfo",
+      "description": "Store contact and location configuration",
+      "type": "object",
+      "properties": {
+        "shopName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Culinary store brand name"
+        },
+        "address": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Physical shop location"
+        },
+        "whatsappNumber": {
+          "type": "string",
+          "maxLength": 30,
+          "description": "WhatsApp contact number for ordering"
+        },
+        "openingHours": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Store business hours"
+        },
+        "announcement": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Special promo or store notice"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update ISO string"
+        }
+      },
+      "required": ["shopName", "address", "whatsappNumber"]
+    }
+  },
+  "firestore": {
+    "/menu_items/{menuId}": {
+      "schema": {
+        "$ref": "#/entities/MenuItem"
+      },
+      "description": "Collection of food and beverage menu items for Jajanan Kakang"
+    },
+    "/shop_info/{docId}": {
+      "schema": {
+        "$ref": "#/entities/ShopInfo"
+      },
+      "description": "Store profile configuration including WhatsApp number and address"
+    }
+  }
+}

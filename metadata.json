@@ -1,0 +1,6 @@
+{
+  "name": "Jajanan Kakang",
+  "description": "Aplikasi web kuliner interaktif Jajanan Kakang dengan sinkronisasi menu online realtime, mode pembeli, dan mode kelola penjual.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
