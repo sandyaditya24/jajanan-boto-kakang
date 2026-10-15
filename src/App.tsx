@@ -8,6 +8,8 @@ import { MenuItem, ShopInfo, CartItem } from './types';
 import {
   DEFAULT_SHOP_INFO,
   DEFAULT_MENU_ITEMS,
+  getLocalMenuItems,
+  getLocalShopInfo,
   testConnection,
   seedInitialDataIfEmpty,
   fetchFreshDataFromServer,
@@ -32,9 +34,9 @@ export default function App() {
   // Mode state: 'buyer' or 'seller' strictly based on URL hash
   const [currentHash, setCurrentHash] = useState<string>(() => window.location.hash);
 
-  // Data states from Firestore
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(DEFAULT_MENU_ITEMS);
-  const [shopInfo, setShopInfo] = useState<ShopInfo>(DEFAULT_SHOP_INFO);
+  // Data states initialized immediately from local persistent store
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => getLocalMenuItems());
+  const [shopInfo, setShopInfo] = useState<ShopInfo>(() => getLocalShopInfo());
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>('Baru saja');
@@ -204,6 +206,53 @@ export default function App() {
     setCart([]);
   };
 
+  // Immediate Optimistic UI Handlers for Seller Actions
+  const handleAddMenuItem = async (itemData: Omit<MenuItem, 'id'>): Promise<string> => {
+    const newItem = await addMenuItem(itemData);
+    setMenuItems((prev) => [newItem, ...prev.filter((i) => i.id !== newItem.id)]);
+    setLastUpdated(getFormattedCurrentTime());
+    return newItem.id;
+  };
+
+  const handleUpdateMenuItem = async (id: string, updates: Partial<MenuItem>): Promise<void> => {
+    await updateMenuItem(id, updates);
+    setMenuItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, ...updates, updatedAt: new Date().toISOString() }
+          : item
+      )
+    );
+    setLastUpdated(getFormattedCurrentTime());
+  };
+
+  const handleDeleteMenuItem = async (id: string): Promise<void> => {
+    await deleteMenuItem(id);
+    setMenuItems((prev) => prev.filter((item) => item.id !== id));
+    setCart((prev) => prev.filter((ci) => ci.item.id !== id));
+    setLastUpdated(getFormattedCurrentTime());
+  };
+
+  const handleToggleAvailability = async (id: string, current: boolean): Promise<void> => {
+    await toggleItemAvailability(id, current);
+    setMenuItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, isAvailable: !current } : item))
+    );
+    setLastUpdated(getFormattedCurrentTime());
+  };
+
+  const handleUpdateShopInfo = async (info: Partial<ShopInfo>): Promise<void> => {
+    await updateShopInfo(info);
+    setShopInfo((prev) => ({ ...prev, ...info, updatedAt: new Date().toISOString() }));
+  };
+
+  const handleRestoreDefaultMenu = async (): Promise<void> => {
+    await restoreDefaultMenu();
+    setMenuItems(DEFAULT_MENU_ITEMS);
+    setShopInfo(DEFAULT_SHOP_INFO);
+    setLastUpdated(getFormattedCurrentTime());
+  };
+
   // Switch to Buyer Mode
   const handleSwitchToBuyer = () => {
     window.location.hash = '#buyer';
@@ -232,12 +281,12 @@ export default function App() {
           <SellerDashboard
             menuItems={menuItems}
             shopInfo={shopInfo}
-            onAddMenuItem={addMenuItem}
-            onUpdateMenuItem={updateMenuItem}
-            onDeleteMenuItem={deleteMenuItem}
-            onToggleAvailability={toggleItemAvailability}
-            onUpdateShopInfo={updateShopInfo}
-            onRestoreDefaultMenu={restoreDefaultMenu}
+            onAddMenuItem={handleAddMenuItem}
+            onUpdateMenuItem={handleUpdateMenuItem}
+            onDeleteMenuItem={handleDeleteMenuItem}
+            onToggleAvailability={handleToggleAvailability}
+            onUpdateShopInfo={handleUpdateShopInfo}
+            onRestoreDefaultMenu={handleRestoreDefaultMenu}
             onSwitchToBuyer={handleSwitchToBuyer}
             onForceRefresh={() => refreshDataFromCloud(true)}
           />

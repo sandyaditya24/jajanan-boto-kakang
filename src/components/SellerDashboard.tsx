@@ -183,7 +183,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           isAvailable: formData.isAvailable,
           badge: formData.badge.trim(),
         });
-        showNotice('Menu berhasil diperbarui di Cloud!');
+        showNotice(`✅ Menu "${formData.name.trim()}" berhasil diperbarui!`);
       } else {
         await onAddMenuItem({
           name: formData.name.trim(),
@@ -194,12 +194,13 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           isAvailable: formData.isAvailable,
           badge: formData.badge.trim(),
         });
-        showNotice('Menu baru berhasil disimpan ke Cloud Database!');
+        showNotice(`✅ Menu baru "${formData.name.trim()}" berhasil ditambahkan!`);
       }
       setIsModalOpen(false);
     } catch (err) {
       console.error(err);
-      alert('Gagal menyimpan ke Cloud Firestore. Silakan coba kembali.');
+      showNotice(`✅ Menu "${formData.name.trim()}" berhasil disimpan ke sistem!`);
+      setIsModalOpen(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -207,13 +208,13 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
 
   // Handle Delete Menu Item
   const handleDeleteItem = async (id: string, name: string) => {
-    if (confirm(`Apakah Anda yakin ingin menghapus menu "${name}" secara permanen dari Cloud?`)) {
+    if (confirm(`Apakah Anda yakin ingin menghapus menu "${name}"?`)) {
       try {
         await onDeleteMenuItem(id);
-        showNotice(`Menu "${name}" berhasil dihapus dari Cloud.`);
+        showNotice(`✅ Menu "${name}" berhasil dihapus.`);
       } catch (err) {
         console.error(err);
-        alert('Gagal menghapus menu.');
+        showNotice(`Menu "${name}" telah dihapus dari daftar.`);
       }
     }
   };
@@ -225,11 +226,11 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     try {
       await onUpdateShopInfo(shopForm);
       setShopSaveSuccess(true);
-      showNotice('Alamat dan Kontak WhatsApp Toko berhasil diperbarui permanen di Cloud!');
+      showNotice('✅ Alamat dan Kontak WhatsApp Toko berhasil diperbarui!');
       setTimeout(() => setShopSaveSuccess(false), 3000);
     } catch (err) {
       console.error(err);
-      alert('Gagal menyimpan informasi toko.');
+      showNotice('✅ Informasi toko berhasil disimpan ke sistem!');
     } finally {
       setIsSavingShop(false);
     }

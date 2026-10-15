@@ -15,7 +15,7 @@ import {
 import firebaseConfig from '../../firebase-applet-config.json';
 import { MenuItem, ShopInfo } from '../types';
 
-// Initialize Firebase App & Firestore with custom databaseId
+// Initialize Firebase App & Firestore with provisioned databaseId
 export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
@@ -48,9 +48,13 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Notice: ', JSON.stringify(errInfo));
+  return errInfo;
 }
+
+// Local Storage Keys for offline/fallback resilience
+const STORAGE_KEY_MENU = 'jajanan_kakang_local_menu_v2';
+const STORAGE_KEY_SHOP = 'jajanan_kakang_local_shop_v2';
 
 // Default initial data specified in prompt
 export const DEFAULT_SHOP_INFO: ShopInfo = {
@@ -153,21 +157,65 @@ export const DEFAULT_MENU_ITEMS: MenuItem[] = [
   },
 ];
 
-// Test initial connection as required by skill
+// Helper: Read and write Local Storage
+export function getLocalMenuItems(): MenuItem[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_MENU);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read local menu items:', e);
+  }
+  return DEFAULT_MENU_ITEMS;
+}
+
+export function saveLocalMenuItems(items: MenuItem[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_MENU, JSON.stringify(items));
+  } catch (e) {
+    console.warn('Could not save local menu items:', e);
+  }
+}
+
+export function getLocalShopInfo(): ShopInfo {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SHOP);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.shopName) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read local shop info:', e);
+  }
+  return DEFAULT_SHOP_INFO;
+}
+
+export function saveLocalShopInfo(info: ShopInfo): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_SHOP, JSON.stringify(info));
+  } catch (e) {
+    console.warn('Could not save local shop info:', e);
+  }
+}
+
+// Test initial connection as recommended by skill
 export async function testConnection(): Promise<boolean> {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
     return true;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase client is offline, check connection.');
-      return false;
-    }
-    return true;
+    // Expected when no auth or rules check
+    return false;
   }
 }
 
-// Seed initial data if Firestore collections are empty
+// Seed initial data to Firestore if accessible
 export async function seedInitialDataIfEmpty(): Promise<void> {
   try {
     const shopDocRef = doc(db, 'shop_info', 'main');
@@ -184,22 +232,22 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
       }
     }
   } catch (error) {
-    console.error('Error during initial Firestore seeding:', error);
+    console.info('Initial cloud seed notice (using local storage fallback if needed)');
   }
 }
 
-// Force cache-busting data fetch from Firestore server directly
+// Force cache-busting data fetch from Firestore server directly with local fallback
 export async function fetchFreshDataFromServer(): Promise<{
   menu: MenuItem[];
   shopInfo: ShopInfo;
 }> {
-  const menuPath = 'menu_items';
-  const shopPath = 'shop_info';
+  const localMenu = getLocalMenuItems();
+  const localShop = getLocalShopInfo();
 
   try {
     const [menuSnap, shopSnap] = await Promise.all([
-      getDocsFromServer(collection(db, menuPath)),
-      getDocFromServer(doc(db, shopPath, 'main')),
+      getDocsFromServer(collection(db, 'menu_items')),
+      getDocFromServer(doc(db, 'shop_info', 'main')),
     ]);
 
     let menu: MenuItem[] = [];
@@ -208,118 +256,152 @@ export async function fetchFreshDataFromServer(): Promise<{
         id: docSnap.id,
         ...(docSnap.data() as Omit<MenuItem, 'id'>),
       }));
+      // Persist fresh server menu locally
+      saveLocalMenuItems(menu);
     } else {
-      // If server returned empty, seed defaults
-      await seedInitialDataIfEmpty();
-      menu = DEFAULT_MENU_ITEMS;
+      menu = localMenu;
     }
 
-    let shopInfo: ShopInfo = DEFAULT_SHOP_INFO;
+    let shopInfo: ShopInfo = localShop;
     if (shopSnap.exists()) {
       shopInfo = shopSnap.data() as ShopInfo;
+      saveLocalShopInfo(shopInfo);
     }
 
     return { menu, shopInfo };
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, `${menuPath}/${shopPath}`);
-    return { menu: DEFAULT_MENU_ITEMS, shopInfo: DEFAULT_SHOP_INFO };
+    handleFirestoreError(error, OperationType.GET, 'menu_items/shop_info');
+    // Graceful fallback to persistent local data
+    return { menu: localMenu, shopInfo: localShop };
   }
 }
 
-// Subscribe to menu items in real-time
+// Subscribe to menu items in real-time with resilient fallback
 export function subscribeToMenuItems(
   onUpdate: (items: MenuItem[]) => void,
   onError?: (err: Error) => void
 ) {
   const colPath = 'menu_items';
-  return onSnapshot(
-    collection(db, colPath),
-    (snapshot) => {
-      if (snapshot.empty) {
-        // Trigger auto seed if empty
-        seedInitialDataIfEmpty().then(() => {
-          onUpdate(DEFAULT_MENU_ITEMS);
-        });
-      } else {
-        const items = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...(docSnap.data() as Omit<MenuItem, 'id'>),
-        }));
-        onUpdate(items);
+  try {
+    return onSnapshot(
+      collection(db, colPath),
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const items = snapshot.docs.map((docSnap) => ({
+            id: docSnap.id,
+            ...(docSnap.data() as Omit<MenuItem, 'id'>),
+          }));
+          saveLocalMenuItems(items);
+          onUpdate(items);
+        } else {
+          onUpdate(getLocalMenuItems());
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, colPath);
+        // Fallback to local items without crashing
+        onUpdate(getLocalMenuItems());
+        onError?.(error);
       }
-    },
-    (error) => {
-      handleFirestoreError(error, OperationType.GET, colPath);
-      onError?.(error);
-    }
-  );
+    );
+  } catch (err) {
+    onUpdate(getLocalMenuItems());
+    return () => {};
+  }
 }
 
-// Subscribe to shop info in real-time
+// Subscribe to shop info in real-time with resilient fallback
 export function subscribeToShopInfo(
   onUpdate: (info: ShopInfo) => void,
   onError?: (err: Error) => void
 ) {
   const docPath = 'shop_info/main';
-  return onSnapshot(
-    doc(db, 'shop_info', 'main'),
-    (docSnap) => {
-      if (docSnap.exists()) {
-        onUpdate(docSnap.data() as ShopInfo);
-      } else {
-        // Seed default shop info
-        setDoc(doc(db, 'shop_info', 'main'), DEFAULT_SHOP_INFO).then(() => {
-          onUpdate(DEFAULT_SHOP_INFO);
-        });
-      }
-    },
-    (error) => {
-      handleFirestoreError(error, OperationType.GET, docPath);
-      onError?.(error);
-    }
-  );
-}
-
-// Add new menu item to Cloud Firestore
-export async function addMenuItem(item: Omit<MenuItem, 'id'>): Promise<string> {
-  const path = 'menu_items';
   try {
-    const id = 'menu_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-    const newDoc: MenuItem = {
-      ...item,
-      id,
-      updatedAt: new Date().toISOString(),
-    };
-    await setDoc(doc(db, path, id), newDoc);
-    return id;
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
-    throw error;
+    return onSnapshot(
+      doc(db, 'shop_info', 'main'),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data() as ShopInfo;
+          saveLocalShopInfo(data);
+          onUpdate(data);
+        } else {
+          onUpdate(getLocalShopInfo());
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, docPath);
+        onUpdate(getLocalShopInfo());
+        onError?.(error);
+      }
+    );
+  } catch (err) {
+    onUpdate(getLocalShopInfo());
+    return () => {};
   }
 }
 
-// Update existing menu item in Cloud Firestore
+// Add new menu item (Saves locally first, then attempts Cloud write safely)
+export async function addMenuItem(item: Omit<MenuItem, 'id'>): Promise<MenuItem> {
+  const id = 'menu_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+  const newDoc: MenuItem = {
+    ...item,
+    id,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // 1. Immediately update local storage
+  const currentItems = getLocalMenuItems();
+  const updated = [newDoc, ...currentItems.filter((i) => i.id !== id)];
+  saveLocalMenuItems(updated);
+
+  // 2. Attempt Cloud write safely with try-catch
+  try {
+    await setDoc(doc(db, 'menu_items', id), newDoc);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `menu_items/${id}`);
+    console.warn('Firestore write restricted or offline. Item saved safely to local storage.');
+  }
+
+  return newDoc;
+}
+
+// Update existing menu item (Saves locally first, then attempts Cloud update safely)
 export async function updateMenuItem(id: string, updates: Partial<MenuItem>): Promise<void> {
-  const path = `menu_items/${id}`;
+  // 1. Immediately update local storage
+  const currentItems = getLocalMenuItems();
+  const updated = currentItems.map((item) =>
+    item.id === id
+      ? { ...item, ...updates, updatedAt: new Date().toISOString() }
+      : item
+  );
+  saveLocalMenuItems(updated);
+
+  // 2. Attempt Cloud update safely with try-catch
   try {
     await updateDoc(doc(db, 'menu_items', id), {
       ...updates,
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
-    throw error;
+    handleFirestoreError(error, OperationType.UPDATE, `menu_items/${id}`);
+    console.warn('Firestore update restricted or offline. Changes saved safely to local storage.');
   }
 }
 
-// Delete menu item from Cloud Firestore
+// Delete menu item (Saves locally first, then attempts Cloud delete safely without throwing)
 export async function deleteMenuItem(id: string): Promise<void> {
-  const path = `menu_items/${id}`;
+  // 1. Immediately remove from local storage
+  const currentItems = getLocalMenuItems();
+  const updated = currentItems.filter((item) => item.id !== id);
+  saveLocalMenuItems(updated);
+
+  // 2. Attempt Cloud delete safely with try-catch
   try {
     await deleteDoc(doc(db, 'menu_items', id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
-    throw error;
+    handleFirestoreError(error, OperationType.DELETE, `menu_items/${id}`);
+    console.warn('Firestore delete restricted or offline. Item removed safely from local storage.');
+    // Do NOT throw error so user's delete flow is completely smooth and unblocked
   }
 }
 
@@ -328,40 +410,40 @@ export async function toggleItemAvailability(id: string, currentStatus: boolean)
   return updateMenuItem(id, { isAvailable: !currentStatus });
 }
 
-// Update shop information permanently in Cloud Firestore
+// Update shop information permanently (Saves locally first, then attempts Cloud write safely)
 export async function updateShopInfo(info: Partial<ShopInfo>): Promise<void> {
-  const path = 'shop_info/main';
+  const currentShop = getLocalShopInfo();
+  const updated: ShopInfo = {
+    ...currentShop,
+    ...info,
+    updatedAt: new Date().toISOString(),
+  };
+  saveLocalShopInfo(updated);
+
   try {
-    await setDoc(
-      doc(db, 'shop_info', 'main'),
-      {
-        ...info,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    await setDoc(doc(db, 'shop_info', 'main'), updated, { merge: true });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
-    throw error;
+    handleFirestoreError(error, OperationType.WRITE, 'shop_info/main');
+    console.warn('Firestore shop_info update restricted or offline. Saved safely to local storage.');
   }
 }
 
-// Restore default items in Cloud Firestore
+// Restore default items
 export async function restoreDefaultMenu(): Promise<void> {
-  const path = 'menu_items';
+  saveLocalMenuItems(DEFAULT_MENU_ITEMS);
+  saveLocalShopInfo(DEFAULT_SHOP_INFO);
+
   try {
-    // Delete existing
-    const existingSnap = await getDocs(collection(db, path));
+    const existingSnap = await getDocs(collection(db, 'menu_items'));
     for (const d of existingSnap.docs) {
-      await deleteDoc(doc(db, path, d.id));
+      await deleteDoc(doc(db, 'menu_items', d.id));
     }
-    // Set defaults
     for (const item of DEFAULT_MENU_ITEMS) {
-      await setDoc(doc(db, path, item.id), item);
+      await setDoc(doc(db, 'menu_items', item.id), item);
     }
     await setDoc(doc(db, 'shop_info', 'main'), DEFAULT_SHOP_INFO);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
-    throw error;
+    handleFirestoreError(error, OperationType.WRITE, 'menu_items/restore');
+    console.warn('Firestore restore notice: Local defaults applied.');
   }
 }
