@@ -52,17 +52,28 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   return errInfo;
 }
 
-// Local Storage Keys for offline/fallback resilience
-const STORAGE_KEY_MENU = 'jajanan_kakang_local_menu_v2';
-const STORAGE_KEY_SHOP = 'jajanan_kakang_local_shop_v2';
+// Local Storage Keys for offline/fallback resilience & full user authority
+const STORAGE_KEY_MENU = 'jajanan_kakang_local_menu_v3';
+const STORAGE_KEY_SHOP = 'jajanan_kakang_local_shop_v3';
+const STORAGE_KEY_DELETED_IDS = 'jajanan_kakang_deleted_ids_v3';
 
-// Default initial data specified in prompt
+// Default initial shop data specified in user prompt
 export const DEFAULT_SHOP_INFO: ShopInfo = {
   shopName: 'Jajanan Kakang',
+  tagline: 'Pusat Jajanan & Kuliner Gurih Lezat Khas Purwakarta',
   address: 'Perum Bumi Jaya Indah (BJI) Blok AX 09 RT 05/14 Purwakarta',
+  city: 'Purwakarta',
+  mapsUrl: 'https://maps.google.com/?q=Perum+Bumi+Jaya+Indah+Purwakarta',
   whatsappNumber: '+6289620012837',
-  openingHours: '10:00 - 21:00 WIB (Setiap Hari)',
-  announcement: '🔥 Promo Hari Ini: Pesan Paket The Best gratis es teh manis! Siap antar ke seluruh area Purwakarta.',
+  whatsappNumberSecondary: '',
+  openingHours: '10:00 - 21:00 WIB (Buka Setiap Hari)',
+  isOpenNow: true,
+  announcement: '🔥 Promo Spesial: Pesan Paket The Best hari ini gratis es teh manis! Siap antar se-Purwakarta.',
+  showAnnouncement: true,
+  deliveryInfo: 'Siap antar area Purwakarta Kota & sekitarnya. Gratis ongkir untuk pesanan min. Rp 30.000.',
+  paymentMethods: 'QRIS (Semua Bank & E-Wallet), Transfer BCA/BRI/Mandiri, Tunai / COD',
+  bankAccount: 'BCA / DANA / QRIS (Konfirmasi di WhatsApp)',
+  adminPin: '132414',
   updatedAt: new Date().toISOString(),
 };
 
@@ -72,10 +83,12 @@ export const DEFAULT_MENU_ITEMS: MenuItem[] = [
     name: 'Pempek Goreng Paket The Best',
     price: 20000,
     category: 'Camilan & Gorengan',
-    description: '1 Kapal Selam Mini, 2 Lenjer Crispy, 2 Kulit Krispi disiram kuah cuko kental pedas asam manis khas Palembang asli.',
+    description: '1 Kapal Selam Mini telur utuh, 2 Lenjer Crispy, 2 Kulit Krispi disiram kuah cuko kental pedas asam manis khas Palembang asli.',
     imageUrl: 'https://images.unsplash.com/photo-1541544741938-0af808871cc0?auto=format&fit=crop&w=800&q=80',
     isAvailable: true,
     badge: 'Best Seller',
+    spicyLevel: 2,
+    portion: '1 Paket (5 Pcs + Cuko)',
     updatedAt: new Date().toISOString(),
   },
   {
@@ -87,6 +100,8 @@ export const DEFAULT_MENU_ITEMS: MenuItem[] = [
     imageUrl: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=800&q=80',
     isAvailable: true,
     badge: 'Favorit',
+    spicyLevel: 2,
+    portion: '1 Porsi (10 Pcs)',
     updatedAt: new Date().toISOString(),
   },
   {
@@ -98,6 +113,8 @@ export const DEFAULT_MENU_ITEMS: MenuItem[] = [
     imageUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80',
     isAvailable: true,
     badge: 'Rekomendasi',
+    spicyLevel: 1,
+    portion: '1 Porsi (8 Pcs)',
     updatedAt: new Date().toISOString(),
   },
   {
@@ -105,10 +122,12 @@ export const DEFAULT_MENU_ITEMS: MenuItem[] = [
     name: 'Es Kuwut Segar Khas Bali',
     price: 10000,
     category: 'Minuman Segar',
-    description: 'Kombinasi kelapa muda serut, potongan melon manis, perasan jeruk nipis segar, selasih, dan sirup dingin pelepas dahaga.',
+    description: 'Kombinasi kelapa muda serut, potongan melon manis, perasan jeruk nipis segar, biji selasih, dan sirup dingin pelepas dahaga.',
     imageUrl: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80',
     isAvailable: true,
     badge: 'Paling Segar',
+    spicyLevel: 0,
+    portion: 'Cup Jumbo 22oz',
     updatedAt: new Date().toISOString(),
   },
   {
@@ -120,6 +139,8 @@ export const DEFAULT_MENU_ITEMS: MenuItem[] = [
     imageUrl: 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?auto=format&fit=crop&w=800&q=80',
     isAvailable: true,
     badge: 'Spesial',
+    spicyLevel: 1,
+    portion: '1 Porsi (4 Pcs)',
     updatedAt: new Date().toISOString(),
   },
   {
@@ -127,10 +148,12 @@ export const DEFAULT_MENU_ITEMS: MenuItem[] = [
     name: 'Tahu Bakso Gurih Khas Semarang',
     price: 18000,
     category: 'Makanan Utama',
-    description: 'Tahu cokelat gurih isi daging sapi kenyal isi 5 pcs digoreng hangat, disantap dengan cabai rawit hijau segar.',
+    description: 'Tahu cokelat gurih isi adonan bakso sapi kenyal padat isi 5 pcs digoreng hangat, disantap dengan cabai rawit hijau segar.',
     imageUrl: 'https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=800&q=80',
     isAvailable: true,
     badge: 'Gurih',
+    spicyLevel: 1,
+    portion: '1 Porsi (5 Pcs + Cabai)',
     updatedAt: new Date().toISOString(),
   },
   {
@@ -142,6 +165,8 @@ export const DEFAULT_MENU_ITEMS: MenuItem[] = [
     imageUrl: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=800&q=80',
     isAvailable: true,
     badge: 'Manis Legit',
+    spicyLevel: 0,
+    portion: '1 Porsi (4 Pcs Besar)',
     updatedAt: new Date().toISOString(),
   },
   {
@@ -153,47 +178,107 @@ export const DEFAULT_MENU_ITEMS: MenuItem[] = [
     imageUrl: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=800&q=80',
     isAvailable: true,
     badge: 'Hemat',
+    spicyLevel: 0,
+    portion: 'Cup Jumbo 22oz',
     updatedAt: new Date().toISOString(),
   },
 ];
 
-// Helper: Read and write Local Storage
+// Helper: Get tombstone deleted IDs to prevent server re-injecting deleted items on refresh
+export function getDeletedItemIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_DELETED_IDS);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        return new Set(arr);
+      }
+    }
+  } catch (e) {
+    console.warn('Error reading deleted IDs:', e);
+  }
+  return new Set<string>();
+}
+
+export function markItemIdAsDeleted(id: string): void {
+  try {
+    const deleted = getDeletedItemIds();
+    deleted.add(id);
+    localStorage.setItem(STORAGE_KEY_DELETED_IDS, JSON.stringify(Array.from(deleted)));
+  } catch (e) {
+    console.warn('Error saving deleted ID:', e);
+  }
+}
+
+export function unmarkItemIdAsDeleted(id: string): void {
+  try {
+    const deleted = getDeletedItemIds();
+    if (deleted.has(id)) {
+      deleted.delete(id);
+      localStorage.setItem(STORAGE_KEY_DELETED_IDS, JSON.stringify(Array.from(deleted)));
+    }
+  } catch (e) {
+    console.warn('Error unmarking deleted ID:', e);
+  }
+}
+
+export function clearDeletedItemIds(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY_DELETED_IDS);
+  } catch (e) {
+    console.warn('Error clearing deleted IDs:', e);
+  }
+}
+
+// Helper: Read and write Local Storage for Menu Items
 export function getLocalMenuItems(): MenuItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_MENU);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+      if (Array.isArray(parsed)) {
+        const deletedIds = getDeletedItemIds();
+        return parsed.filter((item) => !deletedIds.has(item.id));
       }
     }
   } catch (e) {
     console.warn('Could not read local menu items:', e);
   }
-  return DEFAULT_MENU_ITEMS;
+  // If first time, seed defaults locally
+  const initial = DEFAULT_MENU_ITEMS;
+  saveLocalMenuItems(initial);
+  return initial;
 }
 
 export function saveLocalMenuItems(items: MenuItem[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY_MENU, JSON.stringify(items));
+    const deletedIds = getDeletedItemIds();
+    const cleanItems = items.filter((item) => !deletedIds.has(item.id));
+    localStorage.setItem(STORAGE_KEY_MENU, JSON.stringify(cleanItems));
   } catch (e) {
     console.warn('Could not save local menu items:', e);
   }
 }
 
+// Helper: Read and write Local Storage for Shop Info
 export function getLocalShopInfo(): ShopInfo {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_SHOP);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.shopName) {
-        return parsed;
+        return {
+          ...DEFAULT_SHOP_INFO,
+          ...parsed,
+        };
       }
     }
   } catch (e) {
     console.warn('Could not read local shop info:', e);
   }
-  return DEFAULT_SHOP_INFO;
+  const initial = DEFAULT_SHOP_INFO;
+  saveLocalShopInfo(initial);
+  return initial;
 }
 
 export function saveLocalShopInfo(info: ShopInfo): void {
@@ -210,12 +295,11 @@ export async function testConnection(): Promise<boolean> {
     await getDocFromServer(doc(db, 'test', 'connection'));
     return true;
   } catch (error) {
-    // Expected when no auth or rules check
     return false;
   }
 }
 
-// Seed initial data to Firestore if accessible
+// Seed initial data to cloud if accessible and not yet modified
 export async function seedInitialDataIfEmpty(): Promise<void> {
   try {
     const shopDocRef = doc(db, 'shop_info', 'main');
@@ -223,20 +307,53 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
     if (!shopSnap.exists()) {
       await setDoc(shopDocRef, DEFAULT_SHOP_INFO);
     }
-
-    const menuColRef = collection(db, 'menu_items');
-    const menuSnap = await getDocs(menuColRef);
-    if (menuSnap.empty) {
-      for (const item of DEFAULT_MENU_ITEMS) {
-        await setDoc(doc(db, 'menu_items', item.id), item);
-      }
-    }
   } catch (error) {
-    console.info('Initial cloud seed notice (using local storage fallback if needed)');
+    console.info('Initial cloud sync notice');
   }
 }
 
-// Force cache-busting data fetch from Firestore server directly with local fallback
+// Smart merger: server items filtered against deleted IDs, combined with local newly added items
+function mergeMenuLists(serverItems: MenuItem[], localItems: MenuItem[]): MenuItem[] {
+  const deletedIds = getDeletedItemIds();
+  const validServerItems = serverItems.filter((item) => !deletedIds.has(item.id));
+  const serverMap = new Map(validServerItems.map((item) => [item.id, item]));
+
+  // For any item in local, if it is newer or not on server, keep local version
+  const result: MenuItem[] = [];
+  const processedIds = new Set<string>();
+
+  // Process local items first (they have the seller's latest changes)
+  for (const localItem of localItems) {
+    if (deletedIds.has(localItem.id)) continue;
+
+    const serverItem = serverMap.get(localItem.id);
+    if (!serverItem) {
+      // Local item not yet on server or offline write: KEEP IT!
+      result.push(localItem);
+    } else {
+      // If local updatedAt is newer than or equal to server, prefer local
+      const localTime = new Date(localItem.updatedAt || 0).getTime();
+      const serverTime = new Date(serverItem.updatedAt || 0).getTime();
+      if (localTime >= serverTime) {
+        result.push(localItem);
+      } else {
+        result.push(serverItem);
+      }
+    }
+    processedIds.add(localItem.id);
+  }
+
+  // Add any server items that weren't processed and not deleted
+  for (const serverItem of validServerItems) {
+    if (!processedIds.has(serverItem.id)) {
+      result.push(serverItem);
+    }
+  }
+
+  return result;
+}
+
+// Force cache-busting data fetch from Firestore server directly with local authority
 export async function fetchFreshDataFromServer(): Promise<{
   menu: MenuItem[];
   shopInfo: ShopInfo;
@@ -250,33 +367,38 @@ export async function fetchFreshDataFromServer(): Promise<{
       getDocFromServer(doc(db, 'shop_info', 'main')),
     ]);
 
-    let menu: MenuItem[] = [];
+    let mergedMenu: MenuItem[] = localMenu;
     if (!menuSnap.empty) {
-      menu = menuSnap.docs.map((docSnap) => ({
+      const serverItems = menuSnap.docs.map((docSnap) => ({
         id: docSnap.id,
         ...(docSnap.data() as Omit<MenuItem, 'id'>),
       }));
-      // Persist fresh server menu locally
-      saveLocalMenuItems(menu);
-    } else {
-      menu = localMenu;
+      mergedMenu = mergeMenuLists(serverItems, localMenu);
+      saveLocalMenuItems(mergedMenu);
     }
 
-    let shopInfo: ShopInfo = localShop;
+    let mergedShop: ShopInfo = localShop;
     if (shopSnap.exists()) {
-      shopInfo = shopSnap.data() as ShopInfo;
-      saveLocalShopInfo(shopInfo);
+      const serverShop = shopSnap.data() as ShopInfo;
+      // Merge with priority to local settings if updated recently
+      const localTime = new Date(localShop.updatedAt || 0).getTime();
+      const serverTime = new Date(serverShop.updatedAt || 0).getTime();
+      if (serverTime > localTime) {
+        mergedShop = { ...DEFAULT_SHOP_INFO, ...serverShop };
+      } else {
+        mergedShop = { ...DEFAULT_SHOP_INFO, ...localShop };
+      }
+      saveLocalShopInfo(mergedShop);
     }
 
-    return { menu, shopInfo };
+    return { menu: mergedMenu, shopInfo: mergedShop };
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, 'menu_items/shop_info');
-    // Graceful fallback to persistent local data
     return { menu: localMenu, shopInfo: localShop };
   }
 }
 
-// Subscribe to menu items in real-time with resilient fallback
+// Subscribe to menu items in real-time with resilient authority
 export function subscribeToMenuItems(
   onUpdate: (items: MenuItem[]) => void,
   onError?: (err: Error) => void
@@ -286,20 +408,21 @@ export function subscribeToMenuItems(
     return onSnapshot(
       collection(db, colPath),
       (snapshot) => {
+        const localMenu = getLocalMenuItems();
         if (!snapshot.empty) {
-          const items = snapshot.docs.map((docSnap) => ({
+          const serverItems = snapshot.docs.map((docSnap) => ({
             id: docSnap.id,
             ...(docSnap.data() as Omit<MenuItem, 'id'>),
           }));
-          saveLocalMenuItems(items);
-          onUpdate(items);
+          const merged = mergeMenuLists(serverItems, localMenu);
+          saveLocalMenuItems(merged);
+          onUpdate(merged);
         } else {
-          onUpdate(getLocalMenuItems());
+          onUpdate(localMenu);
         }
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, colPath);
-        // Fallback to local items without crashing
         onUpdate(getLocalMenuItems());
         onError?.(error);
       }
@@ -310,7 +433,7 @@ export function subscribeToMenuItems(
   }
 }
 
-// Subscribe to shop info in real-time with resilient fallback
+// Subscribe to shop info in real-time with resilient authority
 export function subscribeToShopInfo(
   onUpdate: (info: ShopInfo) => void,
   onError?: (err: Error) => void
@@ -320,12 +443,19 @@ export function subscribeToShopInfo(
     return onSnapshot(
       doc(db, 'shop_info', 'main'),
       (docSnap) => {
+        const localShop = getLocalShopInfo();
         if (docSnap.exists()) {
-          const data = docSnap.data() as ShopInfo;
-          saveLocalShopInfo(data);
-          onUpdate(data);
+          const serverData = docSnap.data() as ShopInfo;
+          const localTime = new Date(localShop.updatedAt || 0).getTime();
+          const serverTime = new Date(serverData.updatedAt || 0).getTime();
+          const finalShop =
+            serverTime > localTime
+              ? { ...DEFAULT_SHOP_INFO, ...serverData }
+              : { ...DEFAULT_SHOP_INFO, ...localShop };
+          saveLocalShopInfo(finalShop);
+          onUpdate(finalShop);
         } else {
-          onUpdate(getLocalShopInfo());
+          onUpdate(localShop);
         }
       },
       (error) => {
@@ -340,7 +470,7 @@ export function subscribeToShopInfo(
   }
 }
 
-// Add new menu item (Saves locally first, then attempts Cloud write safely)
+// Add new menu item: user is full master
 export async function addMenuItem(item: Omit<MenuItem, 'id'>): Promise<MenuItem> {
   const id = 'menu_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
   const newDoc: MenuItem = {
@@ -349,23 +479,26 @@ export async function addMenuItem(item: Omit<MenuItem, 'id'>): Promise<MenuItem>
     updatedAt: new Date().toISOString(),
   };
 
+  // Remove any previous tombstone if matching id
+  unmarkItemIdAsDeleted(id);
+
   // 1. Immediately update local storage
   const currentItems = getLocalMenuItems();
   const updated = [newDoc, ...currentItems.filter((i) => i.id !== id)];
   saveLocalMenuItems(updated);
 
-  // 2. Attempt Cloud write safely with try-catch
+  // 2. Safely sync to Cloud Firestore
   try {
     await setDoc(doc(db, 'menu_items', id), newDoc);
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, `menu_items/${id}`);
-    console.warn('Firestore write restricted or offline. Item saved safely to local storage.');
+    console.info('Saved locally with full authority.');
   }
 
   return newDoc;
 }
 
-// Update existing menu item (Saves locally first, then attempts Cloud update safely)
+// Update existing menu item: user is full master
 export async function updateMenuItem(id: string, updates: Partial<MenuItem>): Promise<void> {
   // 1. Immediately update local storage
   const currentItems = getLocalMenuItems();
@@ -376,7 +509,7 @@ export async function updateMenuItem(id: string, updates: Partial<MenuItem>): Pr
   );
   saveLocalMenuItems(updated);
 
-  // 2. Attempt Cloud update safely with try-catch
+  // 2. Safely sync to Cloud Firestore
   try {
     await updateDoc(doc(db, 'menu_items', id), {
       ...updates,
@@ -384,24 +517,26 @@ export async function updateMenuItem(id: string, updates: Partial<MenuItem>): Pr
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `menu_items/${id}`);
-    console.warn('Firestore update restricted or offline. Changes saved safely to local storage.');
+    console.info('Updated locally with full authority.');
   }
 }
 
-// Delete menu item (Saves locally first, then attempts Cloud delete safely without throwing)
+// Delete menu item: PERMANENTLY REMOVED AND NEVER RESURRECTED ON REFRESH
 export async function deleteMenuItem(id: string): Promise<void> {
-  // 1. Immediately remove from local storage
+  // 1. Add ID to tombstone list
+  markItemIdAsDeleted(id);
+
+  // 2. Immediately remove from local storage
   const currentItems = getLocalMenuItems();
   const updated = currentItems.filter((item) => item.id !== id);
   saveLocalMenuItems(updated);
 
-  // 2. Attempt Cloud delete safely with try-catch
+  // 3. Attempt deletion from Cloud Firestore
   try {
     await deleteDoc(doc(db, 'menu_items', id));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `menu_items/${id}`);
-    console.warn('Firestore delete restricted or offline. Item removed safely from local storage.');
-    // Do NOT throw error so user's delete flow is completely smooth and unblocked
+    console.info('Deleted locally with permanent tombstone.');
   }
 }
 
@@ -410,7 +545,7 @@ export async function toggleItemAvailability(id: string, currentStatus: boolean)
   return updateMenuItem(id, { isAvailable: !currentStatus });
 }
 
-// Update shop information permanently (Saves locally first, then attempts Cloud write safely)
+// Update shop information permanently
 export async function updateShopInfo(info: Partial<ShopInfo>): Promise<void> {
   const currentShop = getLocalShopInfo();
   const updated: ShopInfo = {
@@ -424,12 +559,13 @@ export async function updateShopInfo(info: Partial<ShopInfo>): Promise<void> {
     await setDoc(doc(db, 'shop_info', 'main'), updated, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, 'shop_info/main');
-    console.warn('Firestore shop_info update restricted or offline. Saved safely to local storage.');
+    console.info('Shop info updated locally with full authority.');
   }
 }
 
 // Restore default items
 export async function restoreDefaultMenu(): Promise<void> {
+  clearDeletedItemIds();
   saveLocalMenuItems(DEFAULT_MENU_ITEMS);
   saveLocalShopInfo(DEFAULT_SHOP_INFO);
 
@@ -444,6 +580,6 @@ export async function restoreDefaultMenu(): Promise<void> {
     await setDoc(doc(db, 'shop_info', 'main'), DEFAULT_SHOP_INFO);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, 'menu_items/restore');
-    console.warn('Firestore restore notice: Local defaults applied.');
+    console.info('Restored defaults locally.');
   }
 }

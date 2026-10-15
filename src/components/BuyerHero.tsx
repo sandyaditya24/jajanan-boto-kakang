@@ -70,14 +70,14 @@ export const BuyerHero: React.FC<BuyerHeroProps> = ({
         </div>
       </div>
 
-      {/* Store Announcement if present */}
-      {shopInfo.announcement && (
-        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-3 sm:p-3.5 flex items-start gap-2.5 shadow-xs">
+      {/* Store Announcement if present and enabled */}
+      {shopInfo.showAnnouncement !== false && shopInfo.announcement && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-3.5 sm:p-4 flex items-start gap-3 shadow-xs">
           <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
             <Megaphone className="w-4 h-4 text-amber-600" />
           </div>
           <div className="flex-1 text-xs sm:text-sm text-stone-700">
-            <span className="font-bold text-amber-900 mr-1.5">Info Toko:</span>
+            <span className="font-extrabold text-amber-900 mr-1.5">Info & Promo Toko:</span>
             <span>{shopInfo.announcement}</span>
           </div>
         </div>

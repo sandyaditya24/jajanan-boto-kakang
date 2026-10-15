@@ -385,6 +385,14 @@ export default function App() {
             <Sparkles className="w-3 h-3 text-amber-500" />
             <span>Real-time Cloud Database • Auto-fetch & Cache-Busting Terintegrasi</span>
           </div>
+          <div className="pt-2 text-[10px] text-stone-600">
+            <a
+              href="#seller"
+              className="hover:text-amber-400 transition-colors inline-flex items-center gap-1 opacity-70 hover:opacity-100"
+            >
+              <span>🔒 Akses Pemilik Toko (#seller)</span>
+            </a>
+          </div>
         </div>
       </footer>
     </div>

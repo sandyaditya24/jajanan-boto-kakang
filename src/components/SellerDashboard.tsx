@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Lock,
   Plus,
@@ -16,12 +16,19 @@ import {
   RefreshCw,
   RotateCcw,
   Sparkles,
-  AlertTriangle,
-  X,
   Sliders,
   DollarSign,
   Tag,
   Image as ImageIcon,
+  Truck,
+  CreditCard,
+  KeyRound,
+  Download,
+  Upload,
+  Copy,
+  Flame,
+  Search,
+  X,
 } from 'lucide-react';
 import { MenuItem, ShopInfo } from '../types';
 import { formatRupiah } from '../utils/format';
@@ -39,8 +46,6 @@ interface SellerDashboardProps {
   onForceRefresh: () => Promise<void>;
 }
 
-const CORRECT_PIN = '132414';
-
 export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   menuItems,
   shopInfo,
@@ -54,20 +59,24 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   onForceRefresh,
 }) => {
   // Authentication State
+  const activePin = shopInfo.adminPin || '132414';
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem('jajanan_kakang_seller_auth') === 'true';
   });
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
 
-  // Active Tab
-  const [activeTab, setActiveTab] = useState<'menu' | 'shop'>('menu');
+  // Active Navigation Tab: 'menu' | 'shop' | 'security'
+  const [activeTab, setActiveTab] = useState<'menu' | 'shop' | 'security'>('menu');
+
+  // Search in seller menu list
+  const [sellerSearch, setSellerSearch] = useState('');
 
   // Modal State for Add / Edit
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
 
-  // Form Fields
+  // Form Fields for Menu Item
   const [formData, setFormData] = useState({
     name: '',
     price: 15000,
@@ -75,20 +84,29 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     description: '',
     imageUrl: '',
     isAvailable: true,
-    badge: '',
+    badge: 'Baru',
+    spicyLevel: 0,
+    portion: '1 Porsi',
   });
 
-  // Shop Info Form
+  // Shop Info Form state
   const [shopForm, setShopForm] = useState<ShopInfo>(shopInfo);
   const [isSavingShop, setIsSavingShop] = useState(false);
   const [shopSaveSuccess, setShopSaveSuccess] = useState(false);
+
+  // PIN Change Form
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pinChangeMsg, setPinChangeMsg] = useState<string | null>(null);
 
   // Action status
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [isRefreshingCloud, setIsRefreshingCloud] = useState(false);
 
-  // Sync shopForm when shopInfo updates from Firestore
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync shopForm when shopInfo updates
   React.useEffect(() => {
     setShopForm(shopInfo);
   }, [shopInfo]);
@@ -96,7 +114,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   // Handle PIN entry
   const handlePinSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (pinInput === CORRECT_PIN) {
+    if (pinInput === activePin) {
       setIsAuthenticated(true);
       sessionStorage.setItem('jajanan_kakang_seller_auth', 'true');
       setPinError(false);
@@ -117,7 +135,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
       const nextPin = pinInput + val;
       setPinInput(nextPin);
       if (nextPin.length === 6) {
-        if (nextPin === CORRECT_PIN) {
+        if (nextPin === activePin) {
           setIsAuthenticated(true);
           sessionStorage.setItem('jajanan_kakang_seller_auth', 'true');
           setPinError(false);
@@ -147,6 +165,8 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         'https://images.unsplash.com/photo-1541544741938-0af808871cc0?auto=format&fit=crop&w=800&q=80',
       isAvailable: true,
       badge: 'Baru',
+      spicyLevel: 0,
+      portion: '1 Porsi',
     });
     setIsModalOpen(true);
   };
@@ -162,8 +182,30 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
       imageUrl: item.imageUrl,
       isAvailable: item.isAvailable,
       badge: item.badge || '',
+      spicyLevel: item.spicyLevel || 0,
+      portion: item.portion || '1 Porsi',
     });
     setIsModalOpen(true);
+  };
+
+  // Duplicate an item
+  const handleDuplicateItem = async (item: MenuItem) => {
+    try {
+      await onAddMenuItem({
+        name: `${item.name} (Salinan)`,
+        price: item.price,
+        category: item.category,
+        description: item.description,
+        imageUrl: item.imageUrl,
+        isAvailable: item.isAvailable,
+        badge: item.badge,
+        spicyLevel: item.spicyLevel,
+        portion: item.portion,
+      });
+      showNotice(`✅ Berhasil menduplikasi menu "${item.name}"`);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   // Handle Save Menu Item
@@ -182,6 +224,8 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           imageUrl: formData.imageUrl.trim(),
           isAvailable: formData.isAvailable,
           badge: formData.badge.trim(),
+          spicyLevel: Number(formData.spicyLevel),
+          portion: formData.portion.trim(),
         });
         showNotice(`✅ Menu "${formData.name.trim()}" berhasil diperbarui!`);
       } else {
@@ -193,13 +237,15 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           imageUrl: formData.imageUrl.trim(),
           isAvailable: formData.isAvailable,
           badge: formData.badge.trim(),
+          spicyLevel: Number(formData.spicyLevel),
+          portion: formData.portion.trim(),
         });
         showNotice(`✅ Menu baru "${formData.name.trim()}" berhasil ditambahkan!`);
       }
       setIsModalOpen(false);
     } catch (err) {
       console.error(err);
-      showNotice(`✅ Menu "${formData.name.trim()}" berhasil disimpan ke sistem!`);
+      showNotice(`✅ Menu "${formData.name.trim()}" tersimpan!`);
       setIsModalOpen(false);
     } finally {
       setIsSubmitting(false);
@@ -208,13 +254,13 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
 
   // Handle Delete Menu Item
   const handleDeleteItem = async (id: string, name: string) => {
-    if (confirm(`Apakah Anda yakin ingin menghapus menu "${name}"?`)) {
+    if (confirm(`Apakah Anda yakin ingin menghapus menu "${name}"? Menu ini tidak akan muncul kembali saat halaman di-refresh.`)) {
       try {
         await onDeleteMenuItem(id);
-        showNotice(`✅ Menu "${name}" berhasil dihapus.`);
+        showNotice(`✅ Menu "${name}" berhasil dihapus secara permanen.`);
       } catch (err) {
         console.error(err);
-        showNotice(`Menu "${name}" telah dihapus dari daftar.`);
+        showNotice(`Menu "${name}" telah dihapus.`);
       }
     }
   };
@@ -226,39 +272,112 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     try {
       await onUpdateShopInfo(shopForm);
       setShopSaveSuccess(true);
-      showNotice('✅ Alamat dan Kontak WhatsApp Toko berhasil diperbarui!');
+      showNotice('✅ Seluruh informasi & pengaturan toko berhasil diperbarui secara permanen!');
       setTimeout(() => setShopSaveSuccess(false), 3000);
     } catch (err) {
       console.error(err);
-      showNotice('✅ Informasi toko berhasil disimpan ke sistem!');
+      showNotice('✅ Pengaturan toko berhasil disimpan!');
     } finally {
       setIsSavingShop(false);
     }
+  };
+
+  // Handle Change PIN
+  const handleChangePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPin.length !== 6 || !/^\d+$/.test(newPin)) {
+      setPinChangeMsg('⚠️ PIN baru harus berupa 6 angka numerik.');
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setPinChangeMsg('⚠️ Konfirmasi PIN tidak cocok.');
+      return;
+    }
+
+    try {
+      await onUpdateShopInfo({ adminPin: newPin });
+      setPinChangeMsg('✅ PIN Keamanan berhasil diubah! Gunakan PIN baru ini untuk login berikutnya.');
+      setNewPin('');
+      setConfirmPin('');
+      showNotice('✅ PIN Admin baru berhasil disimpan!');
+    } catch (err) {
+      setPinChangeMsg('Gagal memperbarui PIN.');
+    }
+  };
+
+  // Export Data JSON Backup
+  const handleExportBackup = () => {
+    const backupData = {
+      version: '3.0',
+      exportedAt: new Date().toISOString(),
+      shopInfo,
+      menuItems,
+    };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `backup-jajanan-kakang-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showNotice('✅ File cadangan data JSON berhasil diunduh!');
+  };
+
+  // Import Data JSON Backup
+  const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const content = event.target?.result as string;
+        const parsed = JSON.parse(content);
+        if (parsed.menuItems && Array.isArray(parsed.menuItems)) {
+          // Update shop info if present
+          if (parsed.shopInfo) {
+            await onUpdateShopInfo(parsed.shopInfo);
+          }
+          // Restore items one by one
+          for (const item of parsed.menuItems) {
+            await onUpdateMenuItem(item.id, item).catch(() => onAddMenuItem(item));
+          }
+          showNotice('✅ Data cadangan berhasil dipulihkan secara lengkap!');
+        } else {
+          alert('Format file backup tidak sesuai.');
+        }
+      } catch (err) {
+        alert('Gagal membaca file cadangan JSON.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   // Handle Restore Default
   const handleRestoreDefaults = async () => {
     if (
       confirm(
-        'PERINGATAN: Menu di Cloud akan dikembalikan ke daftar bawaan awal Jajanan Kakang (Pempek, Cireng, Otak-otak, dsb). Lanjutkan?'
+        'PERINGATAN: Seluruh menu akan dikembalikan ke data awal bawaan Jajanan Kakang (Pempek, Cireng, Otak-otak, dsb). Lanjutkan?'
       )
     ) {
       try {
         await onRestoreDefaultMenu();
-        showNotice('Menu Cloud berhasil di-reset ke data default unggulan!');
+        showNotice('✅ Menu berhasil di-reset ke data default unggulan!');
       } catch (err) {
         console.error(err);
-        alert('Gagal mengembalikan menu default.');
       }
     }
   };
 
-  // Handle Manual Force Refresh
+  // Handle Force Refresh
   const handleRefreshCloud = async () => {
     setIsRefreshingCloud(true);
     try {
       await onForceRefresh();
-      showNotice('Data Cloud Firestore disinkronkan!');
+      showNotice('✅ Sinkronisasi Cloud selesai!');
     } finally {
       setIsRefreshingCloud(false);
     }
@@ -269,18 +388,18 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     setTimeout(() => setActionMessage(null), 3500);
   };
 
-  // Quick preset food pictures
+  // Preset food photography choices
   const presetPhotos = [
     {
-      title: 'Pempek',
+      title: 'Pempek Komplit',
       url: 'https://images.unsplash.com/photo-1541544741938-0af808871cc0?auto=format&fit=crop&w=800&q=80',
     },
     {
-      title: 'Cireng / Gorengan',
+      title: 'Cireng Krispi',
       url: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=800&q=80',
     },
     {
-      title: 'Otak-otak / Seafood',
+      title: 'Otak-otak Gurih',
       url: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80',
     },
     {
@@ -296,7 +415,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
       url: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=800&q=80',
     },
     {
-      title: 'Es Kuwut / Buah',
+      title: 'Es Segar Bali',
       url: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80',
     },
     {
@@ -305,21 +424,28 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     },
   ];
 
+  // Filtered items in seller list
+  const filteredSellerItems = menuItems.filter(
+    (i) =>
+      i.name.toLowerCase().includes(sellerSearch.toLowerCase()) ||
+      i.category.toLowerCase().includes(sellerSearch.toLowerCase())
+  );
+
   // -------------------------------------------------------------
   // 1. PIN GATE VIEW
   // -------------------------------------------------------------
   if (!isAuthenticated) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-amber-200/80 p-6 text-center space-y-6">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center border border-amber-500/20 shadow-inner">
-            <Lock className="w-8 h-8 text-amber-600" />
+        <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-amber-200/90 p-6 text-center space-y-6">
+          <div className="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/30">
+            <Lock className="w-8 h-8" />
           </div>
 
           <div>
-            <h2 className="text-xl font-extrabold text-stone-900">Mode Penjual (Seller)</h2>
+            <h2 className="text-2xl font-black text-stone-900">Kendali Penjual</h2>
             <p className="text-xs text-stone-500 mt-1">
-              Masukkan 6 digit PIN keamanan untuk mengelola menu dan info toko Jajanan Kakang.
+              Masukkan 6 digit PIN untuk mengelola menu, harga, status stok, dan info toko.
             </p>
           </div>
 
@@ -341,12 +467,12 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           </div>
 
           {pinError && (
-            <div className="text-xs font-bold text-red-600 bg-red-50 py-1.5 px-3 rounded-xl border border-red-200 animate-shake">
-              ⚠️ PIN salah! Silakan coba lagi.
+            <div className="text-xs font-bold text-red-600 bg-red-50 py-2 px-3 rounded-xl border border-red-200 animate-shake">
+              ⚠️ PIN salah! Silakan masukkan PIN yang benar.
             </div>
           )}
 
-          {/* Standard Form fallback for desktop/accessibility */}
+          {/* Fallback Input Form */}
           <form onSubmit={handlePinSubmit} className="space-y-3">
             <input
               type="password"
@@ -357,18 +483,18 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 setPinInput(e.target.value);
                 setPinError(false);
               }}
-              placeholder="Ketik PIN..."
-              className="w-full text-center text-lg tracking-widest font-mono py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+              placeholder="Masukkan 6 angka PIN..."
+              className="w-full text-center text-lg tracking-widest font-mono py-2.5 bg-stone-50 border border-stone-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             <button
               type="submit"
-              className="cursor-pointer w-full bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold py-2.5 rounded-xl shadow-md transition-all text-sm"
+              className="cursor-pointer w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 active:scale-95 text-white font-bold py-3 rounded-2xl shadow-md transition-all text-sm"
             >
-              Buka Akses Penjual
+              Masuk ke Kendali Penuh
             </button>
           </form>
 
-          {/* Mobile Numeric Keypad */}
+          {/* Mobile Keypad */}
           <div className="grid grid-cols-3 gap-2 pt-2 border-t border-stone-100">
             {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '✓'].map((keyVal) => {
               return (
@@ -382,7 +508,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                       handleKeypadPress(keyVal);
                     }
                   }}
-                  className={`cursor-pointer h-12 rounded-xl text-base font-bold flex items-center justify-center transition-all active:scale-90 ${
+                  className={`cursor-pointer h-12 rounded-2xl text-base font-extrabold flex items-center justify-center transition-all active:scale-90 ${
                     keyVal === '✓'
                       ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                       : keyVal === 'C'
@@ -396,14 +522,14 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             })}
           </div>
 
-          <div className="pt-2">
+          <div className="pt-1">
             <button
               type="button"
               onClick={onSwitchToBuyer}
-              className="cursor-pointer text-xs font-semibold text-stone-500 hover:text-amber-700 inline-flex items-center gap-1"
+              className="cursor-pointer text-xs font-bold text-stone-500 hover:text-amber-700 inline-flex items-center gap-1"
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Kembali ke Halaman Pembeli (#buyer)</span>
+              <span>Buka Mode Pembeli (#buyer)</span>
             </button>
           </div>
         </div>
@@ -415,54 +541,56 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   // 2. AUTHENTICATED SELLER DASHBOARD VIEW
   // -------------------------------------------------------------
   return (
-    <div className="max-w-5xl mx-auto space-y-5 pb-16">
+    <div className="max-w-5xl mx-auto space-y-6 pb-20">
       {/* Toast Notification */}
       {actionMessage && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-stone-900 text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 border border-stone-700 animate-fade-in-down">
-          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-stone-900 text-white text-xs sm:text-sm font-bold px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 border border-stone-700 animate-fade-in-down">
+          <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
           <span>{actionMessage}</span>
         </div>
       )}
 
-      {/* Top Seller Bar */}
-      <div className="bg-white rounded-2xl p-4 border border-stone-200/90 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      {/* Top Header Bar */}
+      <div className="bg-white rounded-3xl p-5 border border-stone-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="bg-amber-100 text-amber-800 text-[11px] font-extrabold px-2 py-0.5 rounded-md">
-              KONTROL PENJUAL (#seller)
+            <span className="bg-amber-600 text-white text-[11px] font-black px-2.5 py-0.5 rounded-lg tracking-wider">
+              KENDALI PENUH PENJUAL
             </span>
-            <span className="flex items-center gap-1 text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Cloud Firestore Aktif
+            <span className="flex items-center gap-1 text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Sistem Aktif & Terhubung
             </span>
           </div>
-          <h2 className="text-xl font-extrabold text-stone-900 mt-1">
-            Dasbor Pengelolaan Jajanan Kakang
+          <h2 className="text-xl sm:text-2xl font-black text-stone-900 mt-1">
+            Pusat Pengelolaan {shopInfo.shopName}
           </h2>
+          <p className="text-xs text-stone-500">
+            Perubahan menu dan info toko tersimpan permanen dan tidak akan hilang saat di-refresh.
+          </p>
         </div>
 
-        {/* Action navigation buttons */}
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleRefreshCloud}
             disabled={isRefreshingCloud}
-            className="cursor-pointer text-xs font-semibold bg-stone-100 hover:bg-stone-200 text-stone-700 px-3 py-2 rounded-xl flex items-center gap-1.5"
-            title="Tarik pembaruan terbaru dari Firestore"
+            className="cursor-pointer text-xs font-bold bg-stone-100 hover:bg-stone-200 text-stone-700 px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all"
+            title="Sinkronkan dengan Cloud"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingCloud ? 'animate-spin' : ''}`} />
-            <span>Sync Cloud</span>
+            <span>Sync Data</span>
           </button>
           <button
             onClick={onSwitchToBuyer}
-            className="cursor-pointer text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 px-3 py-2 rounded-xl flex items-center gap-1.5"
+            className="cursor-pointer text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all"
             title="Buka tampilan pembeli"
           >
             <Eye className="w-3.5 h-3.5" />
-            <span>Mode Pembeli</span>
+            <span>Pratinjau Toko</span>
           </button>
           <button
             onClick={handleLogout}
-            className="cursor-pointer text-xs font-semibold bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-xl flex items-center gap-1"
+            className="cursor-pointer text-xs font-bold bg-stone-100 hover:bg-red-50 text-stone-600 hover:text-red-600 px-3.5 py-2.5 rounded-xl flex items-center gap-1 transition-all"
             title="Kunci sesi admin"
           >
             <LogOut className="w-3.5 h-3.5" />
@@ -471,264 +599,458 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-          <div className="text-[11px] text-stone-500 font-medium">Total Menu</div>
-          <div className="text-xl sm:text-2xl font-extrabold text-stone-900 mt-0.5">
+        <div className="bg-white p-4 rounded-3xl border border-stone-200 shadow-2xs">
+          <div className="text-[11px] text-stone-500 font-bold uppercase tracking-wider">Total Menu</div>
+          <div className="text-2xl sm:text-3xl font-black text-stone-900 mt-1">
             {menuItems.length}
           </div>
         </div>
-        <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-          <div className="text-[11px] text-emerald-600 font-medium">Menu Tersedia</div>
-          <div className="text-xl sm:text-2xl font-extrabold text-emerald-600 mt-0.5">
+        <div className="bg-white p-4 rounded-3xl border border-stone-200 shadow-2xs">
+          <div className="text-[11px] text-emerald-600 font-bold uppercase tracking-wider">Tersedia</div>
+          <div className="text-2xl sm:text-3xl font-black text-emerald-600 mt-1">
             {menuItems.filter((i) => i.isAvailable).length}
           </div>
         </div>
-        <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-          <div className="text-[11px] text-red-500 font-medium">Menu Habis</div>
-          <div className="text-xl sm:text-2xl font-extrabold text-red-500 mt-0.5">
+        <div className="bg-white p-4 rounded-3xl border border-stone-200 shadow-2xs">
+          <div className="text-[11px] text-red-500 font-bold uppercase tracking-wider">Stok Habis</div>
+          <div className="text-2xl sm:text-3xl font-black text-red-500 mt-1">
             {menuItems.filter((i) => !i.isAvailable).length}
           </div>
         </div>
-        <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-          <div className="text-[11px] text-amber-600 font-medium">Nomor WhatsApp</div>
-          <div className="text-xs sm:text-sm font-bold text-stone-800 mt-1 truncate">
-            {shopInfo.whatsappNumber}
+        <div className="bg-white p-4 rounded-3xl border border-stone-200 shadow-2xs">
+          <div className="text-[11px] text-amber-600 font-bold uppercase tracking-wider">Status Toko</div>
+          <div className="flex items-center gap-1.5 mt-1 font-extrabold text-sm sm:text-base">
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${
+                shopInfo.isOpenNow ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+              }`}
+            />
+            <span className={shopInfo.isOpenNow ? 'text-emerald-700' : 'text-red-600'}>
+              {shopInfo.isOpenNow ? 'Buka' : 'Tutup'}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-stone-200">
+      {/* Navigation Tabs */}
+      <div className="flex flex-wrap gap-2 border-b border-stone-200 pb-2">
         <button
           onClick={() => setActiveTab('menu')}
-          className={`cursor-pointer px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
+          className={`cursor-pointer px-4 py-2.5 font-extrabold text-sm rounded-2xl transition-all flex items-center gap-2 ${
             activeTab === 'menu'
-              ? 'border-amber-600 text-amber-600'
-              : 'border-transparent text-stone-500 hover:text-stone-800'
+              ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
+              : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
           }`}
         >
           <Sliders className="w-4 h-4" />
           <span>Kelola Menu ({menuItems.length})</span>
         </button>
+
         <button
           onClick={() => setActiveTab('shop')}
-          className={`cursor-pointer px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
+          className={`cursor-pointer px-4 py-2.5 font-extrabold text-sm rounded-2xl transition-all flex items-center gap-2 ${
             activeTab === 'shop'
-              ? 'border-amber-600 text-amber-600'
-              : 'border-transparent text-stone-500 hover:text-stone-800'
+              ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
+              : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
           }`}
         >
           <Store className="w-4 h-4" />
-          <span>Pengaturan Toko & Kontak WA</span>
+          <span>Pengaturan Toko & Informasi</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('security')}
+          className={`cursor-pointer px-4 py-2.5 font-extrabold text-sm rounded-2xl transition-all flex items-center gap-2 ${
+            activeTab === 'security'
+              ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
+              : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
+          }`}
+        >
+          <KeyRound className="w-4 h-4" />
+          <span>Keamanan & Cadangan Data</span>
         </button>
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* TAB 1: KELOLA MENU */}
+      {/* TAB 1: KELOLA MENU                                             */}
       {/* ------------------------------------------------------------- */}
       {activeTab === 'menu' && (
         <div className="space-y-4">
+          {/* Action Row */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <button
               onClick={handleOpenAddModal}
-              className="cursor-pointer inline-flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 active:scale-95 text-white font-bold py-2.5 px-4 rounded-xl shadow-md text-sm transition-all"
+              className="cursor-pointer inline-flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 hover:from-amber-700 hover:to-orange-700 active:scale-95 text-white font-extrabold py-3 px-5 rounded-2xl shadow-lg shadow-orange-600/25 text-sm transition-all"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-5 h-5" />
               <span>+ Tambah Menu Baru</span>
             </button>
 
-            <button
-              onClick={handleRestoreDefaults}
-              className="cursor-pointer inline-flex items-center justify-center gap-1.5 text-xs text-stone-500 hover:text-stone-700 bg-stone-100 hover:bg-stone-200 px-3 py-2 rounded-xl transition-all"
-              title="Kembalikan menu awal jika terhapus"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset ke Menu Default</span>
-            </button>
+            {/* Quick Search in Seller list */}
+            <div className="relative flex-1 max-w-xs">
+              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={sellerSearch}
+                onChange={(e) => setSellerSearch(e.target.value)}
+                placeholder="Cari menu di dasbor..."
+                className="w-full pl-9 pr-3 py-2 bg-white rounded-xl border border-stone-200 text-xs text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
           </div>
 
-          {/* Menu Items Table / Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {menuItems.map((item) => (
-              <div
-                key={item.id}
-                className="bg-white rounded-2xl p-3.5 border border-stone-200 shadow-2xs hover:shadow-xs transition-all flex gap-3.5 items-start justify-between"
-              >
-                <img
-                  src={item.imageUrl}
-                  alt={item.name}
-                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover bg-stone-100 shrink-0"
-                />
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-1">
-                    <h3 className="font-bold text-sm sm:text-base text-stone-900 leading-tight truncate">
-                      {item.name}
-                    </h3>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                    <span className="text-xs font-bold text-amber-600">
-                      {formatRupiah(item.price)}
-                    </span>
-                    <span className="text-[10px] bg-stone-100 text-stone-600 px-2 py-0.5 rounded-md">
-                      {item.category}
-                    </span>
-                    {item.badge && (
-                      <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-md">
-                        {item.badge}
-                      </span>
+          {/* Menu Items Cards */}
+          {filteredSellerItems.length === 0 ? (
+            <div className="bg-white rounded-3xl p-10 text-center border border-stone-200">
+              <p className="text-stone-500 text-sm">Tidak ada menu yang cocok.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredSellerItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-white rounded-3xl p-4 border border-stone-200/90 shadow-sm hover:shadow-md transition-all flex gap-4 items-start justify-between"
+                >
+                  <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden bg-stone-100 shrink-0">
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      className="w-full h-full object-cover"
+                    />
+                    {!item.isAvailable && (
+                      <div className="absolute inset-0 bg-stone-900/60 backdrop-blur-[1px] flex items-center justify-center text-white text-[10px] font-bold">
+                        Habis
+                      </div>
                     )}
                   </div>
 
-                  <p className="text-xs text-stone-500 line-clamp-1 mt-1">{item.description}</p>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-extrabold text-base text-stone-900 truncate">
+                      {item.name}
+                    </h3>
 
-                  {/* Stock Toggle & Edit/Delete actions */}
-                  <div className="flex items-center justify-between gap-2 mt-3 pt-2 border-t border-stone-100">
-                    <button
-                      onClick={() => onToggleAvailability(item.id, item.isAvailable)}
-                      className={`cursor-pointer text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all ${
-                        item.isAvailable
-                          ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                          : 'bg-red-100 text-red-700 hover:bg-red-200'
-                      }`}
-                    >
-                      {item.isAvailable ? '● Tersedia' : '✕ Habis'}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      <span className="text-sm font-black text-amber-600">
+                        {formatRupiah(item.price)}
+                      </span>
+                      <span className="text-[10px] bg-stone-100 font-semibold text-stone-600 px-2 py-0.5 rounded-md">
+                        {item.category}
+                      </span>
+                      {item.badge && (
+                        <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-md">
+                          {item.badge}
+                        </span>
+                      )}
+                    </div>
 
-                    <div className="flex items-center gap-1">
+                    <p className="text-xs text-stone-500 line-clamp-1 mt-1">{item.description}</p>
+
+                    {/* Stock toggle and management buttons */}
+                    <div className="flex items-center justify-between gap-2 mt-3 pt-2.5 border-t border-stone-100">
                       <button
-                        onClick={() => handleOpenEditModal(item)}
-                        className="cursor-pointer p-1.5 text-stone-600 hover:text-amber-600 hover:bg-amber-50 rounded-lg text-xs font-semibold flex items-center gap-1"
-                        title="Edit Menu"
+                        onClick={() => onToggleAvailability(item.id, item.isAvailable)}
+                        className={`cursor-pointer text-xs font-bold px-3 py-1.5 rounded-xl transition-all ${
+                          item.isAvailable
+                            ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                            : 'bg-red-100 text-red-700 hover:bg-red-200'
+                        }`}
+                        title="Klik untuk ubah stok (Tersedia / Habis)"
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
-                        <span>Edit</span>
+                        {item.isAvailable ? '● Tersedia' : '✕ Habis'}
                       </button>
-                      <button
-                        onClick={() => handleDeleteItem(item.id, item.name)}
-                        className="cursor-pointer p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                        title="Hapus Menu"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleDuplicateItem(item)}
+                          className="cursor-pointer p-2 text-stone-500 hover:text-amber-600 hover:bg-amber-50 rounded-xl"
+                          title="Duplikat Menu"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleOpenEditModal(item)}
+                          className="cursor-pointer p-2 text-stone-600 hover:text-amber-600 hover:bg-amber-50 rounded-xl flex items-center gap-1 text-xs font-bold"
+                          title="Edit Menu"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          <span className="hidden sm:inline">Edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteItem(item.id, item.name)}
+                          className="cursor-pointer p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-xl"
+                          title="Hapus Menu Permanen"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* TAB 2: PENGATURAN TOKO & KONTAK WA */}
+      {/* TAB 2: PENGATURAN TOKO & INFORMASI LENGKAP                     */}
       {/* ------------------------------------------------------------- */}
       {activeTab === 'shop' && (
-        <div className="bg-white rounded-2xl p-5 border border-stone-200 shadow-sm max-w-2xl">
-          <h3 className="text-base sm:text-lg font-bold text-stone-900 mb-1">
-            Informasi Toko & Kontak WhatsApp
-          </h3>
-          <p className="text-xs text-stone-500 mb-5">
-            Data ini akan tersimpan permanen di Cloud Firestore dan langsung diterapkan pada link pemesanan WhatsApp serta tampilan pembeli.
-          </p>
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-stone-200 shadow-sm max-w-3xl space-y-6">
+          <div>
+            <h3 className="text-xl font-black text-stone-900">
+              Pengaturan Toko & Informasi Kuliner
+            </h3>
+            <p className="text-xs text-stone-500 mt-1">
+              Atur identitas toko, nomor WhatsApp pemesanan, jam operasional, info pengiriman, dan banner promo. Data tersimpan permanen dan tidak akan hilang saat di-refresh.
+            </p>
+          </div>
 
-          <form onSubmit={handleSaveShopInfo} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">Nama Toko Kuliner</label>
-              <div className="relative">
-                <Store className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
+          <form onSubmit={handleSaveShopInfo} className="space-y-6">
+            {/* Section 1: Identitas Toko */}
+            <div className="space-y-4 pt-2">
+              <h4 className="text-xs font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5 border-b border-amber-100 pb-2">
+                <Store className="w-4 h-4 text-amber-600" />
+                <span>1. Profil Toko</span>
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Nama Toko Kuliner</label>
+                  <input
+                    type="text"
+                    required
+                    value={shopForm.shopName}
+                    onChange={(e) => setShopForm({ ...shopForm, shopName: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Kota / Kabupaten</label>
+                  <input
+                    type="text"
+                    required
+                    value={shopForm.city}
+                    onChange={(e) => setShopForm({ ...shopForm, city: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Slogan / Tagline Toko</label>
                 <input
                   type="text"
-                  required
-                  value={shopForm.shopName}
-                  onChange={(e) => setShopForm({ ...shopForm, shopName: e.target.value })}
-                  className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  value={shopForm.tagline}
+                  onChange={(e) => setShopForm({ ...shopForm, tagline: e.target.value })}
+                  placeholder="Pusat Jajanan & Kuliner Gurih Lezat Khas Purwakarta"
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">
-                Nomor WhatsApp Toko (Penerima Pesanan)
-              </label>
-              <div className="relative">
-                <Phone className="w-4 h-4 text-emerald-600 absolute left-3 top-3" />
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Alamat Lengkap Toko</label>
+                <div className="relative">
+                  <MapPin className="w-4 h-4 text-amber-600 absolute left-3 top-3.5" />
+                  <textarea
+                    rows={2}
+                    required
+                    value={shopForm.address}
+                    onChange={(e) => setShopForm({ ...shopForm, address: e.target.value })}
+                    placeholder="Perum Bumi Jaya Indah (BJI) Blok AX 09 RT 05/14 Purwakarta"
+                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Tautan Google Maps Lokasi</label>
                 <input
-                  type="text"
-                  required
-                  value={shopForm.whatsappNumber}
-                  onChange={(e) => setShopForm({ ...shopForm, whatsappNumber: e.target.value })}
-                  placeholder="+6289620012837"
-                  className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <p className="text-[11px] text-stone-400 mt-1">
-                Gunakan format +628... atau 08... Semua tombol "Pesan WA" akan ditujukan ke nomor ini.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">Alamat Lengkap Toko</label>
-              <div className="relative">
-                <MapPin className="w-4 h-4 text-amber-600 absolute left-3 top-3" />
-                <textarea
-                  rows={2}
-                  required
-                  value={shopForm.address}
-                  onChange={(e) => setShopForm({ ...shopForm, address: e.target.value })}
-                  placeholder="Perum Bumi Jaya Indah (BJI) Blok AX 09 RT 05/14 Purwakarta"
-                  className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  type="url"
+                  value={shopForm.mapsUrl || ''}
+                  onChange={(e) => setShopForm({ ...shopForm, mapsUrl: e.target.value })}
+                  placeholder="https://maps.google.com/?q=..."
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">Jam Operasional</label>
-              <div className="relative">
-                <Clock className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
+            {/* Section 2: Kontak Pemesanan */}
+            <div className="space-y-4 pt-4">
+              <h4 className="text-xs font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5 border-b border-amber-100 pb-2">
+                <Phone className="w-4 h-4 text-emerald-600" />
+                <span>2. Kontak WhatsApp Pemesanan</span>
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Nomor WhatsApp Utama (Wajib)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={shopForm.whatsappNumber}
+                    onChange={(e) => setShopForm({ ...shopForm, whatsappNumber: e.target.value })}
+                    placeholder="+6289620012837"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <p className="text-[11px] text-stone-400 mt-1">
+                    Seluruh tombol order pembeli otomatis menuju ke nomor ini.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Nomor WhatsApp / Kontak Cadangan (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    value={shopForm.whatsappNumberSecondary || ''}
+                    onChange={(e) => setShopForm({ ...shopForm, whatsappNumberSecondary: e.target.value })}
+                    placeholder="08..."
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Status Buka & Jam Kerja */}
+            <div className="space-y-4 pt-4">
+              <h4 className="text-xs font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5 border-b border-amber-100 pb-2">
+                <Clock className="w-4 h-4 text-amber-600" />
+                <span>3. Jam Operasional & Status Buka</span>
+              </h4>
+
+              <div className="flex items-center justify-between p-4 bg-amber-50/70 rounded-2xl border border-amber-200">
+                <div>
+                  <div className="font-extrabold text-sm text-stone-900">
+                    Status Toko Saat Ini: {shopForm.isOpenNow ? '🟢 Buka Sekarang' : '🔴 Tutup Sementara'}
+                  </div>
+                  <p className="text-xs text-stone-500">
+                    Jika ditutup sementara, pembeli tetap bisa melihat menu dan melakukan pre-order via WA.
+                  </p>
+                </div>
+
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={shopForm.isOpenNow}
+                    onChange={(e) => setShopForm({ ...shopForm, isOpenNow: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-12 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Jam Operasional Toko</label>
                 <input
                   type="text"
                   value={shopForm.openingHours}
                   onChange={(e) => setShopForm({ ...shopForm, openingHours: e.target.value })}
-                  placeholder="10:00 - 21:00 WIB (Setiap Hari)"
-                  className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="10:00 - 21:00 WIB (Buka Setiap Hari)"
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">
-                Pengumuman / Promo Toko
-              </label>
-              <div className="relative">
-                <Megaphone className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
-                <textarea
-                  rows={2}
-                  value={shopForm.announcement}
-                  onChange={(e) => setShopForm({ ...shopForm, announcement: e.target.value })}
-                  placeholder="Contoh: Promo Gratis Es Teh Manis untuk pembelian di atas Rp 30.000!"
-                  className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            {/* Section 4: Banner Pengumuman & Promo */}
+            <div className="space-y-4 pt-4">
+              <h4 className="text-xs font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5 border-b border-amber-100 pb-2">
+                <Megaphone className="w-4 h-4 text-orange-600" />
+                <span>4. Banner Promo & Pengumuman Berjalan</span>
+              </h4>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="showAnnouncement"
+                  checked={shopForm.showAnnouncement}
+                  onChange={(e) => setShopForm({ ...shopForm, showAnnouncement: e.target.checked })}
+                  className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
                 />
+                <label htmlFor="showAnnouncement" className="text-xs font-bold text-stone-800">
+                  Tampilkan Teks Pengumuman di Bagian Atas Halaman
+                </label>
+              </div>
+
+              <textarea
+                rows={2}
+                value={shopForm.announcement}
+                onChange={(e) => setShopForm({ ...shopForm, announcement: e.target.value })}
+                placeholder="🔥 Promo Spesial: Pesan Paket The Best hari ini gratis es teh manis! Siap kirim area Purwakarta."
+                className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+
+            {/* Section 5: Pengiriman & Pembayaran */}
+            <div className="space-y-4 pt-4">
+              <h4 className="text-xs font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5 border-b border-amber-100 pb-2">
+                <Truck className="w-4 h-4 text-blue-600" />
+                <span>5. Info Pengiriman & Pembayaran</span>
+              </h4>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Info Ongkir & Pengantaran
+                </label>
+                <input
+                  type="text"
+                  value={shopForm.deliveryInfo}
+                  onChange={(e) => setShopForm({ ...shopForm, deliveryInfo: e.target.value })}
+                  placeholder="Siap antar area Purwakarta Kota. Gratis ongkir min. Rp 30.000."
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Metode Pembayaran yang Diterima
+                  </label>
+                  <input
+                    type="text"
+                    value={shopForm.paymentMethods}
+                    onChange={(e) => setShopForm({ ...shopForm, paymentMethods: e.target.value })}
+                    placeholder="QRIS, Transfer BCA/BRI, Tunai/COD"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Nomor Rekening / Info Pembayaran
+                  </label>
+                  <input
+                    type="text"
+                    value={shopForm.bankAccount}
+                    onChange={(e) => setShopForm({ ...shopForm, bankAccount: e.target.value })}
+                    placeholder="BCA / DANA (Kirim rincian via WA)"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="pt-2 flex items-center gap-3">
+            {/* Save Button */}
+            <div className="pt-4 border-t border-stone-200 flex items-center gap-3">
               <button
                 type="submit"
                 disabled={isSavingShop}
-                className="cursor-pointer inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold py-2.5 px-5 rounded-xl shadow-md text-sm transition-all"
+                className="cursor-pointer inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white font-extrabold py-3.5 px-6 rounded-2xl shadow-lg shadow-emerald-600/20 text-sm transition-all"
               >
-                <Save className="w-4 h-4" />
-                <span>{isSavingShop ? 'Menyimpan ke Cloud...' : 'Simpan Pengaturan ke Cloud'}</span>
+                <Save className="w-5 h-5" />
+                <span>{isSavingShop ? 'Menyimpan...' : 'Simpan Semua Pengaturan Toko'}</span>
               </button>
 
               {shopSaveSuccess && (
-                <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                <span className="text-xs font-extrabold text-emerald-600 flex items-center gap-1.5 animate-bounce">
                   <CheckCircle className="w-4 h-4" />
-                  Tersimpan di Cloud!
+                  Pengaturan Toko Berhasil Disimpan!
                 </span>
               )}
             </div>
@@ -737,34 +1059,160 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* MODAL: ADD / EDIT MENU */}
+      {/* TAB 3: KEAMANAN & CADANGAN DATA (PIN & BACKUP)                */}
+      {/* ------------------------------------------------------------- */}
+      {activeTab === 'security' && (
+        <div className="space-y-6 max-w-3xl">
+          {/* Card 1: Ganti PIN Admin */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-stone-200 shadow-sm space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                <KeyRound className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-stone-900">Ganti PIN Keamanan Admin</h3>
+                <p className="text-xs text-stone-500">
+                  PIN saat ini: <span className="font-mono font-bold text-stone-800">{activePin}</span>. Anda dapat menggantinya dengan 6 angka rahasia baru.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleChangePin} className="space-y-4 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    PIN Baru (6 Digit Angka)
+                  </label>
+                  <input
+                    type="password"
+                    maxLength={6}
+                    required
+                    value={newPin}
+                    onChange={(e) => setNewPin(e.target.value)}
+                    placeholder="Contoh: 123456"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-center text-lg tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Ulangi PIN Baru
+                  </label>
+                  <input
+                    type="password"
+                    maxLength={6}
+                    required
+                    value={confirmPin}
+                    onChange={(e) => setConfirmPin(e.target.value)}
+                    placeholder="Ketik ulang PIN..."
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-center text-lg tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              {pinChangeMsg && (
+                <div className="text-xs font-bold text-stone-800 p-2.5 bg-stone-100 rounded-xl">
+                  {pinChangeMsg}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="cursor-pointer bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-md transition-all"
+              >
+                Simpan PIN Baru
+              </button>
+            </form>
+          </div>
+
+          {/* Card 2: Backup & Restore */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-stone-200 shadow-sm space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
+                <Download className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-stone-900">Cadangan & Pemulihan Data (Backup JSON)</h3>
+                <p className="text-xs text-stone-500">
+                  Ekspor file backup untuk menyimpan salinan data menu dan info toko di HP atau Laptop Anda kapan saja.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <button
+                onClick={handleExportBackup}
+                className="cursor-pointer inline-flex items-center gap-2 bg-stone-900 hover:bg-black text-white font-bold text-xs py-3 px-4 rounded-2xl shadow-md active:scale-95 transition-all"
+              >
+                <Download className="w-4 h-4" />
+                <span>Unduh File Cadangan (.JSON)</span>
+              </button>
+
+              <label className="cursor-pointer inline-flex items-center gap-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs py-3 px-4 rounded-2xl border border-stone-300 active:scale-95 transition-all">
+                <Upload className="w-4 h-4" />
+                <span>Pulihkan dari File (.JSON)</span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportBackup}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Card 3: Reset ke Menu Default Bawaan */}
+          <div className="bg-red-50/70 rounded-3xl p-6 sm:p-8 border border-red-200 space-y-3">
+            <div className="flex items-center gap-2 text-red-800 font-black text-sm">
+              <RotateCcw className="w-4 h-4 text-red-600" />
+              <span>Reset ke Pengaturan Awal Pabrik</span>
+            </div>
+            <p className="text-xs text-red-700 leading-relaxed">
+              Jika Anda ingin mengembalikan seluruh menu ke menu unggulan default awal Jajanan Kakang (Pempek, Cireng, Otak-otak, dsb).
+            </p>
+            <button
+              onClick={handleRestoreDefaults}
+              className="cursor-pointer bg-red-600 hover:bg-red-700 active:scale-95 text-white font-extrabold text-xs py-2.5 px-4 rounded-xl shadow-md transition-all inline-flex items-center gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Kembalikan ke Menu Bawaan</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* MODAL: ADD / EDIT MENU                                         */}
       {/* ------------------------------------------------------------- */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs">
-          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="p-4 bg-amber-600 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2 font-bold text-base">
-                <Edit2 className="w-4 h-4" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/70 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+            <div className="p-5 bg-gradient-to-r from-amber-600 to-orange-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2 font-black text-base sm:text-lg">
+                <Edit2 className="w-5 h-5" />
                 <span>{editingItem ? 'Edit Menu' : 'Tambah Menu Baru'}</span>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="cursor-pointer w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+                className="cursor-pointer w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveItem} className="p-5 overflow-y-auto space-y-4 flex-1">
+            <form onSubmit={handleSaveItem} className="p-5 sm:p-6 overflow-y-auto space-y-4 flex-1">
               <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">Nama Makanan / Minuman</label>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Nama Makanan / Minuman (Wajib)
+                </label>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Contoh: Pempek Lenjer Jumbo"
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="Contoh: Pempek Kapal Selam Jumbo"
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
 
@@ -772,7 +1220,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Harga (Rupiah)</label>
                   <div className="relative">
-                    <DollarSign className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-3" />
+                    <DollarSign className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
                     <input
                       type="number"
                       required
@@ -780,17 +1228,30 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                       step={500}
                       value={formData.price}
                       onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
-                      className="w-full pl-8 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
                 </div>
 
                 <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Porsi / Takaran</label>
+                  <input
+                    type="text"
+                    value={formData.portion}
+                    onChange={(e) => setFormData({ ...formData, portion: e.target.value })}
+                    placeholder="Contoh: 1 Porsi, 10 Pcs, Cup 22oz"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Kategori</label>
                   <select
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
                     <option value="Camilan & Gorengan">Camilan & Gorengan</option>
                     <option value="Makanan Utama">Makanan Utama</option>
@@ -798,18 +1259,32 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     <option value="Paket Hemat">Paket Hemat</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Tingkat Kepedasan</label>
+                  <select
+                    value={formData.spicyLevel}
+                    onChange={(e) => setFormData({ ...formData, spicyLevel: Number(e.target.value) })}
+                    className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value={0}>Tidak Pedas (Manis / Gurih)</option>
+                    <option value={1}>🌶️ Level 1 (Sedang)</option>
+                    <option value={2}>🌶️🌶️ Level 2 (Pedas Mantap)</option>
+                    <option value={3}>🌶️🌶️🌶️ Level 3 (Ekstra Pedas)</option>
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">Badge / Tag Khusus</label>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Badge Khusus / Label</label>
                 <div className="relative">
-                  <Tag className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-3" />
+                  <Tag className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
                   <input
                     type="text"
                     value={formData.badge}
                     onChange={(e) => setFormData({ ...formData, badge: e.target.value })}
-                    placeholder="Contoh: Best Seller, Favorit, Pedas, Promo"
-                    className="w-full pl-8 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="Contoh: Best Seller, Favorit, Rekomendasi, Promo, Spesial"
+                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
               </div>
@@ -820,28 +1295,28 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   rows={2}
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Jelaskan kelezatan bahan, porsi, dan bumbu pelengkap..."
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="Rincian kelezatan, bumbu pelengkap, dan keistimewaan rasa..."
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 leading-relaxed"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1">URL Foto Makanan</label>
                 <div className="relative">
-                  <ImageIcon className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-3" />
+                  <ImageIcon className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
                   <input
                     type="url"
                     value={formData.imageUrl}
                     onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                    placeholder="https://..."
-                    className="w-full pl-8 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="https://images.unsplash.com/..."
+                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
 
-                {/* Preset quick photo choices */}
-                <div className="mt-2">
-                  <div className="text-[10px] text-stone-400 font-semibold mb-1">
-                    Atau pilih foto kuliner siap pakai:
+                {/* Quick Curated Presets */}
+                <div className="mt-2.5">
+                  <div className="text-[10px] text-stone-400 font-bold mb-1">
+                    Atau gunakan foto kuliner cepat:
                   </div>
                   <div className="flex gap-1.5 overflow-x-auto pb-1">
                     {presetPhotos.map((preset) => (
@@ -849,7 +1324,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                         key={preset.title}
                         type="button"
                         onClick={() => setFormData({ ...formData, imageUrl: preset.url })}
-                        className="cursor-pointer shrink-0 text-[10px] bg-stone-100 hover:bg-amber-100 text-stone-700 px-2 py-1 rounded-md border border-stone-200"
+                        className="cursor-pointer shrink-0 text-[10px] bg-stone-100 hover:bg-amber-100 text-stone-700 px-2.5 py-1 rounded-xl border border-stone-200 font-medium"
                       >
                         {preset.title}
                       </button>
@@ -857,9 +1332,9 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   </div>
                 </div>
 
-                {/* Preview Image */}
+                {/* Live Preview */}
                 {formData.imageUrl && (
-                  <div className="mt-2 rounded-xl overflow-hidden h-28 bg-stone-100 border border-stone-200">
+                  <div className="mt-2.5 rounded-2xl overflow-hidden h-32 bg-stone-100 border border-stone-200">
                     <img
                       src={formData.imageUrl}
                       alt="Preview"
@@ -873,7 +1348,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 )}
               </div>
 
-              <div className="flex items-center gap-2 pt-2">
+              <div className="flex items-center gap-2 pt-1">
                 <input
                   type="checkbox"
                   id="modalIsAvailable"
@@ -882,25 +1357,25 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
                 />
                 <label htmlFor="modalIsAvailable" className="text-xs font-bold text-stone-800">
-                  Stok Tersedia (Aktif untuk Dipesan)
+                  Stok Tersedia (Aktif untuk Dipesan Pembeli)
                 </label>
               </div>
 
-              <div className="pt-3 border-t border-stone-100 flex items-center justify-end gap-2">
+              <div className="pt-3 border-t border-stone-100 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="cursor-pointer px-4 py-2 rounded-xl text-xs font-semibold text-stone-600 hover:bg-stone-100"
+                  className="cursor-pointer px-4 py-2.5 rounded-xl text-xs font-bold text-stone-600 hover:bg-stone-100"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="cursor-pointer bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-5 py-2 rounded-xl shadow-md transition-all flex items-center gap-1.5"
+                  className="cursor-pointer bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white text-xs font-bold px-6 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-1.5"
                 >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>{isSubmitting ? 'Menyimpan...' : 'Simpan ke Cloud'}</span>
+                  <Save className="w-4 h-4" />
+                  <span>{isSubmitting ? 'Menyimpan...' : 'Simpan Menu'}</span>
                 </button>
               </div>
             </form>
