@@ -1,3 +1,16 @@
+export const MENU_CATEGORIES = [
+  'Semua Menu',
+  'Gurih & Renyah',
+  'Manis & Lumer',
+  'Pedas Nampol',
+  'Makanan Berat & Paket',
+  'Minuman Segar & Es',
+  'Camilan Tradisional',
+  'Promo / Paket Hemat',
+] as const;
+
+export type MenuCategory = (typeof MENU_CATEGORIES)[number];
+
 export interface MenuItem {
   id: string;
   name: string;

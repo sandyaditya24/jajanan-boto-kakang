@@ -42,21 +42,21 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   return (
     <>
       {/* Sticky Bottom Bar on Mobile/Desktop */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 p-3 sm:p-4 bg-gradient-to-t from-stone-900/40 via-stone-900/10 to-transparent pointer-events-none">
+      <div className="fixed bottom-0 left-0 right-0 z-40 p-3 sm:p-4 bg-gradient-to-t from-stone-950/60 via-stone-950/20 to-transparent pointer-events-none">
         <div className="max-w-md mx-auto pointer-events-auto">
-          <div className="bg-stone-900/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl border border-stone-800 flex items-center justify-between gap-3 animate-fade-in-up">
+          <div className="bg-stone-900/95 backdrop-blur-md text-white p-3.5 rounded-3xl shadow-2xl border border-stone-800 flex items-center justify-between gap-3 animate-fade-in-up">
             <div className="flex items-center gap-3">
               <div className="relative">
-                <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-white shadow-md">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-700 flex items-center justify-center text-white shadow-md">
                   <ShoppingBag className="w-5 h-5" />
                 </div>
-                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white font-extrabold text-[11px] w-5 h-5 rounded-full flex items-center justify-center shadow-xs border-2 border-stone-900">
+                <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-white font-black text-[11px] w-5 h-5 rounded-full flex items-center justify-center shadow-xs border-2 border-stone-900">
                   {totalQuantity}
                 </span>
               </div>
               <div>
                 <div className="text-[11px] text-stone-400 font-medium">Total ({totalQuantity} menu):</div>
-                <div className="text-base font-extrabold text-amber-400">
+                <div className="text-base font-black text-emerald-400">
                   {formatRupiah(totalPrice)}
                 </div>
               </div>
@@ -64,7 +64,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
             <button
               onClick={() => setIsOpen(true)}
-              className="cursor-pointer bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 active:scale-95 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-1.5"
+              className="cursor-pointer bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-95 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-2xl shadow-md transition-all flex items-center gap-1.5"
             >
               <span>Lihat & Pesan</span>
               <span className="bg-white/20 px-1.5 py-0.5 rounded text-[11px]">→</span>
@@ -75,14 +75,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
       {/* Cart Modal / Sheet */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-stone-900/60 backdrop-blur-xs animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-stone-950/70 backdrop-blur-xs animate-fade-in">
           <div className="w-full max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
             {/* Header */}
-            <div className="p-4 bg-amber-600 text-white flex items-center justify-between">
+            <div className="p-4 bg-gradient-to-r from-stone-900 to-emerald-950 text-white flex items-center justify-between border-b border-emerald-900/40">
               <div className="flex items-center gap-2">
-                <ShoppingBag className="w-5 h-5 text-amber-200" />
-                <h3 className="font-bold text-base sm:text-lg">Pesanan Saya</h3>
-                <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                <ShoppingBag className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-extrabold text-base sm:text-lg">Pesanan Saya</h3>
+                <span className="bg-emerald-500/20 text-emerald-300 text-xs px-2.5 py-0.5 rounded-full font-bold border border-emerald-500/30">
                   {totalQuantity} Item
                 </span>
               </div>

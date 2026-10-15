@@ -15,23 +15,22 @@ import {
   LogOut,
   RefreshCw,
   RotateCcw,
-  Sparkles,
   Sliders,
   DollarSign,
   Tag,
-  Image as ImageIcon,
   Truck,
-  CreditCard,
   KeyRound,
   Download,
   Upload,
   Copy,
-  Flame,
   Search,
   X,
+  FolderOpen,
+  Image as ImageIcon,
 } from 'lucide-react';
-import { MenuItem, ShopInfo } from '../types';
+import { MenuItem, ShopInfo, MENU_CATEGORIES } from '../types';
 import { formatRupiah } from '../utils/format';
+import { compressImageFileToBase64 } from '../utils/image';
 
 interface SellerDashboardProps {
   menuItems: MenuItem[];
@@ -45,6 +44,9 @@ interface SellerDashboardProps {
   onSwitchToBuyer: () => void;
   onForceRefresh: () => Promise<void>;
 }
+
+// Available categories for selection in Add / Edit form (excluding 'Semua Menu')
+const SELLER_CATEGORIES = MENU_CATEGORIES.filter((c) => c !== 'Semua Menu');
 
 export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   menuItems,
@@ -80,14 +82,17 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   const [formData, setFormData] = useState({
     name: '',
     price: 15000,
-    category: 'Camilan & Gorengan',
+    category: 'Gurih & Renyah',
     description: '',
     imageUrl: '',
     isAvailable: true,
-    badge: 'Baru',
+    badge: 'Favorit',
     spicyLevel: 0,
     portion: '1 Porsi',
   });
+
+  const [isCompressingImage, setIsCompressingImage] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
 
   // Shop Info Form state
   const [shopForm, setShopForm] = useState<ShopInfo>(shopInfo);
@@ -104,7 +109,8 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [isRefreshingCloud, setIsRefreshingCloud] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageFileInputRef = useRef<HTMLInputElement>(null);
+  const backupFileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync shopForm when shopInfo updates
   React.useEffect(() => {
@@ -159,15 +165,15 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     setFormData({
       name: '',
       price: 15000,
-      category: 'Camilan & Gorengan',
+      category: 'Gurih & Renyah',
       description: '',
-      imageUrl:
-        'https://images.unsplash.com/photo-1541544741938-0af808871cc0?auto=format&fit=crop&w=800&q=80',
+      imageUrl: '',
       isAvailable: true,
-      badge: 'Baru',
+      badge: 'Favorit',
       spicyLevel: 0,
       portion: '1 Porsi',
     });
+    setShowUrlInput(false);
     setIsModalOpen(true);
   };
 
@@ -177,15 +183,35 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     setFormData({
       name: item.name,
       price: item.price,
-      category: item.category,
-      description: item.description,
-      imageUrl: item.imageUrl,
+      category: item.category || 'Gurih & Renyah',
+      description: item.description || '',
+      imageUrl: item.imageUrl || '',
       isAvailable: item.isAvailable,
       badge: item.badge || '',
       spicyLevel: item.spicyLevel || 0,
       portion: item.portion || '1 Porsi',
     });
+    setShowUrlInput(false);
     setIsModalOpen(true);
+  };
+
+  // Image upload from mobile/laptop file system
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsCompressingImage(true);
+    try {
+      const base64Url = await compressImageFileToBase64(file, 800, 0.8);
+      setFormData((prev) => ({ ...prev, imageUrl: base64Url }));
+      showNotice('✅ Foto dari galeri berhasil dimuat dan dioptimasi!');
+    } catch (err) {
+      console.error(err);
+      alert('Gagal memproses file foto. Pastikan format gambar valid (JPG, PNG, WebP).');
+    } finally {
+      setIsCompressingImage(false);
+      e.target.value = '';
+    }
   };
 
   // Duplicate an item
@@ -215,13 +241,17 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
 
     setIsSubmitting(true);
     try {
+      const finalImage =
+        formData.imageUrl.trim() ||
+        'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
+
       if (editingItem) {
         await onUpdateMenuItem(editingItem.id, {
           name: formData.name.trim(),
           price: Number(formData.price),
           category: formData.category,
           description: formData.description.trim(),
-          imageUrl: formData.imageUrl.trim(),
+          imageUrl: finalImage,
           isAvailable: formData.isAvailable,
           badge: formData.badge.trim(),
           spicyLevel: Number(formData.spicyLevel),
@@ -234,7 +264,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           price: Number(formData.price),
           category: formData.category,
           description: formData.description.trim(),
-          imageUrl: formData.imageUrl.trim(),
+          imageUrl: finalImage,
           isAvailable: formData.isAvailable,
           badge: formData.badge.trim(),
           spicyLevel: Number(formData.spicyLevel),
@@ -336,11 +366,9 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         const content = event.target?.result as string;
         const parsed = JSON.parse(content);
         if (parsed.menuItems && Array.isArray(parsed.menuItems)) {
-          // Update shop info if present
           if (parsed.shopInfo) {
             await onUpdateShopInfo(parsed.shopInfo);
           }
-          // Restore items one by one
           for (const item of parsed.menuItems) {
             await onUpdateMenuItem(item.id, item).catch(() => onAddMenuItem(item));
           }
@@ -360,7 +388,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   const handleRestoreDefaults = async () => {
     if (
       confirm(
-        'PERINGATAN: Seluruh menu akan dikembalikan ke data awal bawaan Jajanan Kakang (Pempek, Cireng, Otak-otak, dsb). Lanjutkan?'
+        'PERINGATAN: Seluruh menu akan dikembalikan ke data awal bawaan Jajanan Kakang. Lanjutkan?'
       )
     ) {
       try {
@@ -388,42 +416,6 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     setTimeout(() => setActionMessage(null), 3500);
   };
 
-  // Preset food photography choices
-  const presetPhotos = [
-    {
-      title: 'Pempek Komplit',
-      url: 'https://images.unsplash.com/photo-1541544741938-0af808871cc0?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      title: 'Cireng Krispi',
-      url: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      title: 'Otak-otak Gurih',
-      url: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      title: 'Dimsum Mentai',
-      url: 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      title: 'Tahu Bakso',
-      url: 'https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      title: 'Pisang Madu',
-      url: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      title: 'Es Segar Bali',
-      url: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      title: 'Es Teh Jumbo',
-      url: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=800&q=80',
-    },
-  ];
-
   // Filtered items in seller list
   const filteredSellerItems = menuItems.filter(
     (i) =>
@@ -437,15 +429,15 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   if (!isAuthenticated) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-amber-200/90 p-6 text-center space-y-6">
-          <div className="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/30">
+        <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-stone-200 p-6 sm:p-8 text-center space-y-6">
+          <div className="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-tr from-stone-900 to-emerald-950 text-emerald-400 flex items-center justify-center shadow-xl border border-emerald-800/40">
             <Lock className="w-8 h-8" />
           </div>
 
           <div>
             <h2 className="text-2xl font-black text-stone-900">Kendali Penjual</h2>
             <p className="text-xs text-stone-500 mt-1">
-              Masukkan 6 digit PIN untuk mengelola menu, harga, status stok, dan info toko.
+              Masukkan 6 digit PIN untuk mengelola menu, foto, harga, dan info toko.
             </p>
           </div>
 
@@ -458,7 +450,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   key={idx}
                   className={`w-3.5 h-3.5 rounded-full transition-all ${
                     hasDigit
-                      ? 'bg-amber-600 scale-110 shadow-xs'
+                      ? 'bg-emerald-700 scale-110 shadow-xs'
                       : 'border-2 border-stone-300 bg-stone-100'
                   }`}
                 />
@@ -467,7 +459,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           </div>
 
           {pinError && (
-            <div className="text-xs font-bold text-red-600 bg-red-50 py-2 px-3 rounded-xl border border-red-200 animate-shake">
+            <div className="text-xs font-bold text-red-700 bg-red-50 py-2 px-3 rounded-xl border border-red-200 animate-shake">
               ⚠️ PIN salah! Silakan masukkan PIN yang benar.
             </div>
           )}
@@ -484,13 +476,13 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 setPinError(false);
               }}
               placeholder="Masukkan 6 angka PIN..."
-              className="w-full text-center text-lg tracking-widest font-mono py-2.5 bg-stone-50 border border-stone-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full text-center text-lg tracking-widest font-mono py-2.5 bg-stone-50 border border-stone-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-600"
             />
             <button
               type="submit"
-              className="cursor-pointer w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 active:scale-95 text-white font-bold py-3 rounded-2xl shadow-md transition-all text-sm"
+              className="cursor-pointer w-full bg-stone-900 hover:bg-emerald-900 active:scale-95 text-white font-bold py-3 rounded-2xl shadow-md transition-all text-sm"
             >
-              Masuk ke Kendali Penuh
+              Buka Akses Pengelola
             </button>
           </form>
 
@@ -510,10 +502,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   }}
                   className={`cursor-pointer h-12 rounded-2xl text-base font-extrabold flex items-center justify-center transition-all active:scale-90 ${
                     keyVal === '✓'
-                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      ? 'bg-emerald-700 text-white hover:bg-emerald-800'
                       : keyVal === 'C'
                       ? 'bg-stone-200 text-stone-700 hover:bg-stone-300 text-xs'
-                      : 'bg-stone-100 text-stone-800 hover:bg-amber-100'
+                      : 'bg-stone-100 text-stone-800 hover:bg-emerald-50 hover:text-emerald-900'
                   }`}
                 >
                   {keyVal}
@@ -526,7 +518,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             <button
               type="button"
               onClick={onSwitchToBuyer}
-              className="cursor-pointer text-xs font-bold text-stone-500 hover:text-amber-700 inline-flex items-center gap-1"
+              className="cursor-pointer text-xs font-bold text-stone-500 hover:text-emerald-700 inline-flex items-center gap-1"
             >
               <Eye className="w-3.5 h-3.5" />
               <span>Buka Mode Pembeli (#buyer)</span>
@@ -544,29 +536,29 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       {/* Toast Notification */}
       {actionMessage && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-stone-900 text-white text-xs sm:text-sm font-bold px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 border border-stone-700 animate-fade-in-down">
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-stone-900 text-white text-xs sm:text-sm font-bold px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 border border-emerald-600/40 animate-fade-in-down">
           <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
           <span>{actionMessage}</span>
         </div>
       )}
 
       {/* Top Header Bar */}
-      <div className="bg-white rounded-3xl p-5 border border-stone-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-stone-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="bg-amber-600 text-white text-[11px] font-black px-2.5 py-0.5 rounded-lg tracking-wider">
-              KENDALI PENUH PENJUAL
+            <span className="bg-stone-900 text-white text-[11px] font-black px-2.5 py-0.5 rounded-lg tracking-wider">
+              KENDALI PENJUAL
             </span>
-            <span className="flex items-center gap-1 text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Sistem Aktif & Terhubung
+            <span className="flex items-center gap-1 text-[11px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+              Terkoneksi Cloud Realtime
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-stone-900 mt-1">
-            Pusat Pengelolaan {shopInfo.shopName}
+            Dasbor Pengelolaan {shopInfo.shopName}
           </h2>
           <p className="text-xs text-stone-500">
-            Perubahan menu dan info toko tersimpan permanen dan tidak akan hilang saat di-refresh.
+            Penambahan menu, foto galeri, dan info toko tersimpan permanen dan tidak akan hilang saat di-refresh.
           </p>
         </div>
 
@@ -574,23 +566,23 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           <button
             onClick={handleRefreshCloud}
             disabled={isRefreshingCloud}
-            className="cursor-pointer text-xs font-bold bg-stone-100 hover:bg-stone-200 text-stone-700 px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all"
+            className="cursor-pointer text-xs font-bold bg-stone-100 hover:bg-stone-200 text-stone-700 px-3.5 py-2.5 rounded-2xl flex items-center gap-1.5 transition-all"
             title="Sinkronkan dengan Cloud"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingCloud ? 'animate-spin' : ''}`} />
-            <span>Sync Data</span>
+            <span>Sync Cloud</span>
           </button>
           <button
             onClick={onSwitchToBuyer}
-            className="cursor-pointer text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all"
+            className="cursor-pointer text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3.5 py-2.5 rounded-2xl flex items-center gap-1.5 transition-all"
             title="Buka tampilan pembeli"
           >
             <Eye className="w-3.5 h-3.5" />
-            <span>Pratinjau Toko</span>
+            <span>Mode Pembeli</span>
           </button>
           <button
             onClick={handleLogout}
-            className="cursor-pointer text-xs font-bold bg-stone-100 hover:bg-red-50 text-stone-600 hover:text-red-600 px-3.5 py-2.5 rounded-xl flex items-center gap-1 transition-all"
+            className="cursor-pointer text-xs font-bold bg-stone-100 hover:bg-red-50 text-stone-600 hover:text-red-600 px-3.5 py-2.5 rounded-2xl flex items-center gap-1 transition-all"
             title="Kunci sesi admin"
           >
             <LogOut className="w-3.5 h-3.5" />
@@ -608,26 +600,26 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           </div>
         </div>
         <div className="bg-white p-4 rounded-3xl border border-stone-200 shadow-2xs">
-          <div className="text-[11px] text-emerald-600 font-bold uppercase tracking-wider">Tersedia</div>
-          <div className="text-2xl sm:text-3xl font-black text-emerald-600 mt-1">
+          <div className="text-[11px] text-emerald-700 font-bold uppercase tracking-wider">Tersedia</div>
+          <div className="text-2xl sm:text-3xl font-black text-emerald-700 mt-1">
             {menuItems.filter((i) => i.isAvailable).length}
           </div>
         </div>
         <div className="bg-white p-4 rounded-3xl border border-stone-200 shadow-2xs">
-          <div className="text-[11px] text-red-500 font-bold uppercase tracking-wider">Stok Habis</div>
-          <div className="text-2xl sm:text-3xl font-black text-red-500 mt-1">
+          <div className="text-[11px] text-red-600 font-bold uppercase tracking-wider">Stok Habis</div>
+          <div className="text-2xl sm:text-3xl font-black text-red-600 mt-1">
             {menuItems.filter((i) => !i.isAvailable).length}
           </div>
         </div>
         <div className="bg-white p-4 rounded-3xl border border-stone-200 shadow-2xs">
-          <div className="text-[11px] text-amber-600 font-bold uppercase tracking-wider">Status Toko</div>
-          <div className="flex items-center gap-1.5 mt-1 font-extrabold text-sm sm:text-base">
+          <div className="text-[11px] text-emerald-800 font-bold uppercase tracking-wider">Status Toko</div>
+          <div className="flex items-center gap-1.5 mt-1 font-black text-sm sm:text-base">
             <span
               className={`w-2.5 h-2.5 rounded-full ${
                 shopInfo.isOpenNow ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
               }`}
             />
-            <span className={shopInfo.isOpenNow ? 'text-emerald-700' : 'text-red-600'}>
+            <span className={shopInfo.isOpenNow ? 'text-emerald-800' : 'text-red-600'}>
               {shopInfo.isOpenNow ? 'Buka' : 'Tutup'}
             </span>
           </div>
@@ -640,7 +632,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           onClick={() => setActiveTab('menu')}
           className={`cursor-pointer px-4 py-2.5 font-extrabold text-sm rounded-2xl transition-all flex items-center gap-2 ${
             activeTab === 'menu'
-              ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
+              ? 'bg-stone-900 text-white shadow-md'
               : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
           }`}
         >
@@ -652,7 +644,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           onClick={() => setActiveTab('shop')}
           className={`cursor-pointer px-4 py-2.5 font-extrabold text-sm rounded-2xl transition-all flex items-center gap-2 ${
             activeTab === 'shop'
-              ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
+              ? 'bg-stone-900 text-white shadow-md'
               : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
           }`}
         >
@@ -664,7 +656,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           onClick={() => setActiveTab('security')}
           className={`cursor-pointer px-4 py-2.5 font-extrabold text-sm rounded-2xl transition-all flex items-center gap-2 ${
             activeTab === 'security'
-              ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
+              ? 'bg-stone-900 text-white shadow-md'
               : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
           }`}
         >
@@ -682,7 +674,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <button
               onClick={handleOpenAddModal}
-              className="cursor-pointer inline-flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 hover:from-amber-700 hover:to-orange-700 active:scale-95 text-white font-extrabold py-3 px-5 rounded-2xl shadow-lg shadow-orange-600/25 text-sm transition-all"
+              className="cursor-pointer inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-800 to-teal-900 hover:from-emerald-900 hover:to-teal-950 active:scale-95 text-white font-extrabold py-3 px-5 rounded-2xl shadow-lg shadow-emerald-900/20 text-sm transition-all"
             >
               <Plus className="w-5 h-5" />
               <span>+ Tambah Menu Baru</span>
@@ -696,7 +688,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 value={sellerSearch}
                 onChange={(e) => setSellerSearch(e.target.value)}
                 placeholder="Cari menu di dasbor..."
-                className="w-full pl-9 pr-3 py-2 bg-white rounded-xl border border-stone-200 text-xs text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full pl-9 pr-3 py-2 bg-white rounded-2xl border border-stone-200 text-xs text-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-600"
               />
             </div>
           </div>
@@ -732,14 +724,14 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     </h3>
 
                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                      <span className="text-sm font-black text-amber-600">
+                      <span className="text-sm font-black text-emerald-800">
                         {formatRupiah(item.price)}
                       </span>
                       <span className="text-[10px] bg-stone-100 font-semibold text-stone-600 px-2 py-0.5 rounded-md">
                         {item.category}
                       </span>
                       {item.badge && (
-                        <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-md">
+                        <span className="text-[10px] bg-emerald-100 text-emerald-900 font-bold px-1.5 py-0.5 rounded-md">
                           {item.badge}
                         </span>
                       )}
@@ -764,14 +756,14 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleDuplicateItem(item)}
-                          className="cursor-pointer p-2 text-stone-500 hover:text-amber-600 hover:bg-amber-50 rounded-xl"
+                          className="cursor-pointer p-2 text-stone-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl"
                           title="Duplikat Menu"
                         >
                           <Copy className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleOpenEditModal(item)}
-                          className="cursor-pointer p-2 text-stone-600 hover:text-amber-600 hover:bg-amber-50 rounded-xl flex items-center gap-1 text-xs font-bold"
+                          className="cursor-pointer p-2 text-stone-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl flex items-center gap-1 text-xs font-bold"
                           title="Edit Menu"
                         >
                           <Edit2 className="w-4 h-4" />
@@ -811,8 +803,8 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           <form onSubmit={handleSaveShopInfo} className="space-y-6">
             {/* Section 1: Identitas Toko */}
             <div className="space-y-4 pt-2">
-              <h4 className="text-xs font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5 border-b border-amber-100 pb-2">
-                <Store className="w-4 h-4 text-amber-600" />
+              <h4 className="text-xs font-black uppercase text-stone-900 tracking-wider flex items-center gap-1.5 border-b border-stone-100 pb-2">
+                <Store className="w-4 h-4 text-emerald-700" />
                 <span>1. Profil Toko</span>
               </h4>
 
@@ -824,7 +816,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     required
                     value={shopForm.shopName}
                     onChange={(e) => setShopForm({ ...shopForm, shopName: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 font-bold"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 font-bold"
                   />
                 </div>
 
@@ -835,7 +827,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     required
                     value={shopForm.city}
                     onChange={(e) => setShopForm({ ...shopForm, city: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   />
                 </div>
               </div>
@@ -847,21 +839,21 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   value={shopForm.tagline}
                   onChange={(e) => setShopForm({ ...shopForm, tagline: e.target.value })}
                   placeholder="Pusat Jajanan & Kuliner Gurih Lezat Khas Purwakarta"
-                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1">Alamat Lengkap Toko</label>
                 <div className="relative">
-                  <MapPin className="w-4 h-4 text-amber-600 absolute left-3 top-3.5" />
+                  <MapPin className="w-4 h-4 text-emerald-700 absolute left-3 top-3.5" />
                   <textarea
                     rows={2}
                     required
                     value={shopForm.address}
                     onChange={(e) => setShopForm({ ...shopForm, address: e.target.value })}
                     placeholder="Perum Bumi Jaya Indah (BJI) Blok AX 09 RT 05/14 Purwakarta"
-                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   />
                 </div>
               </div>
@@ -873,14 +865,14 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   value={shopForm.mapsUrl || ''}
                   onChange={(e) => setShopForm({ ...shopForm, mapsUrl: e.target.value })}
                   placeholder="https://maps.google.com/?q=..."
-                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
                 />
               </div>
             </div>
 
             {/* Section 2: Kontak Pemesanan */}
             <div className="space-y-4 pt-4">
-              <h4 className="text-xs font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5 border-b border-amber-100 pb-2">
+              <h4 className="text-xs font-black uppercase text-stone-900 tracking-wider flex items-center gap-1.5 border-b border-stone-100 pb-2">
                 <Phone className="w-4 h-4 text-emerald-600" />
                 <span>2. Kontak WhatsApp Pemesanan</span>
               </h4>
@@ -896,7 +888,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     value={shopForm.whatsappNumber}
                     onChange={(e) => setShopForm({ ...shopForm, whatsappNumber: e.target.value })}
                     placeholder="+6289620012837"
-                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   />
                   <p className="text-[11px] text-stone-400 mt-1">
                     Seluruh tombol order pembeli otomatis menuju ke nomor ini.
@@ -912,7 +904,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     value={shopForm.whatsappNumberSecondary || ''}
                     onChange={(e) => setShopForm({ ...shopForm, whatsappNumberSecondary: e.target.value })}
                     placeholder="08..."
-                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   />
                 </div>
               </div>
@@ -920,12 +912,12 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
 
             {/* Section 3: Status Buka & Jam Kerja */}
             <div className="space-y-4 pt-4">
-              <h4 className="text-xs font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5 border-b border-amber-100 pb-2">
-                <Clock className="w-4 h-4 text-amber-600" />
+              <h4 className="text-xs font-black uppercase text-stone-900 tracking-wider flex items-center gap-1.5 border-b border-stone-100 pb-2">
+                <Clock className="w-4 h-4 text-emerald-700" />
                 <span>3. Jam Operasional & Status Buka</span>
               </h4>
 
-              <div className="flex items-center justify-between p-4 bg-amber-50/70 rounded-2xl border border-amber-200">
+              <div className="flex items-center justify-between p-4 bg-stone-50 rounded-2xl border border-stone-200">
                 <div>
                   <div className="font-extrabold text-sm text-stone-900">
                     Status Toko Saat Ini: {shopForm.isOpenNow ? '🟢 Buka Sekarang' : '🔴 Tutup Sementara'}
@@ -942,7 +934,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     onChange={(e) => setShopForm({ ...shopForm, isOpenNow: e.target.checked })}
                     className="sr-only peer"
                   />
-                  <div className="w-12 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                  <div className="w-12 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-700"></div>
                 </label>
               </div>
 
@@ -953,15 +945,15 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   value={shopForm.openingHours}
                   onChange={(e) => setShopForm({ ...shopForm, openingHours: e.target.value })}
                   placeholder="10:00 - 21:00 WIB (Buka Setiap Hari)"
-                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                 />
               </div>
             </div>
 
             {/* Section 4: Banner Pengumuman & Promo */}
             <div className="space-y-4 pt-4">
-              <h4 className="text-xs font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5 border-b border-amber-100 pb-2">
-                <Megaphone className="w-4 h-4 text-orange-600" />
+              <h4 className="text-xs font-black uppercase text-stone-900 tracking-wider flex items-center gap-1.5 border-b border-stone-100 pb-2">
+                <Megaphone className="w-4 h-4 text-emerald-700" />
                 <span>4. Banner Promo & Pengumuman Berjalan</span>
               </h4>
 
@@ -971,7 +963,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   id="showAnnouncement"
                   checked={shopForm.showAnnouncement}
                   onChange={(e) => setShopForm({ ...shopForm, showAnnouncement: e.target.checked })}
-                  className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
+                  className="w-4 h-4 rounded text-emerald-700 focus:ring-emerald-600"
                 />
                 <label htmlFor="showAnnouncement" className="text-xs font-bold text-stone-800">
                   Tampilkan Teks Pengumuman di Bagian Atas Halaman
@@ -983,14 +975,14 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 value={shopForm.announcement}
                 onChange={(e) => setShopForm({ ...shopForm, announcement: e.target.value })}
                 placeholder="🔥 Promo Spesial: Pesan Paket The Best hari ini gratis es teh manis! Siap kirim area Purwakarta."
-                className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
               />
             </div>
 
             {/* Section 5: Pengiriman & Pembayaran */}
             <div className="space-y-4 pt-4">
-              <h4 className="text-xs font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5 border-b border-amber-100 pb-2">
-                <Truck className="w-4 h-4 text-blue-600" />
+              <h4 className="text-xs font-black uppercase text-stone-900 tracking-wider flex items-center gap-1.5 border-b border-stone-100 pb-2">
+                <Truck className="w-4 h-4 text-emerald-700" />
                 <span>5. Info Pengiriman & Pembayaran</span>
               </h4>
 
@@ -1003,7 +995,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   value={shopForm.deliveryInfo}
                   onChange={(e) => setShopForm({ ...shopForm, deliveryInfo: e.target.value })}
                   placeholder="Siap antar area Purwakarta Kota. Gratis ongkir min. Rp 30.000."
-                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                 />
               </div>
 
@@ -1017,7 +1009,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     value={shopForm.paymentMethods}
                     onChange={(e) => setShopForm({ ...shopForm, paymentMethods: e.target.value })}
                     placeholder="QRIS, Transfer BCA/BRI, Tunai/COD"
-                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   />
                 </div>
 
@@ -1030,7 +1022,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     value={shopForm.bankAccount}
                     onChange={(e) => setShopForm({ ...shopForm, bankAccount: e.target.value })}
                     placeholder="BCA / DANA (Kirim rincian via WA)"
-                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   />
                 </div>
               </div>
@@ -1041,14 +1033,14 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
               <button
                 type="submit"
                 disabled={isSavingShop}
-                className="cursor-pointer inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white font-extrabold py-3.5 px-6 rounded-2xl shadow-lg shadow-emerald-600/20 text-sm transition-all"
+                className="cursor-pointer inline-flex items-center gap-2 bg-stone-900 hover:bg-emerald-900 active:scale-95 text-white font-extrabold py-3.5 px-6 rounded-2xl shadow-lg transition-all text-sm"
               >
                 <Save className="w-5 h-5" />
                 <span>{isSavingShop ? 'Menyimpan...' : 'Simpan Semua Pengaturan Toko'}</span>
               </button>
 
               {shopSaveSuccess && (
-                <span className="text-xs font-extrabold text-emerald-600 flex items-center gap-1.5 animate-bounce">
+                <span className="text-xs font-extrabold text-emerald-700 flex items-center gap-1.5 animate-bounce">
                   <CheckCircle className="w-4 h-4" />
                   Pengaturan Toko Berhasil Disimpan!
                 </span>
@@ -1066,13 +1058,13 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           {/* Card 1: Ganti PIN Admin */}
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-stone-200 shadow-sm space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
-                <KeyRound className="w-5 h-5 text-amber-600" />
+              <div className="w-10 h-10 rounded-2xl bg-stone-100 text-stone-900 flex items-center justify-center">
+                <KeyRound className="w-5 h-5 text-stone-800" />
               </div>
               <div>
                 <h3 className="text-lg font-black text-stone-900">Ganti PIN Keamanan Admin</h3>
                 <p className="text-xs text-stone-500">
-                  PIN saat ini: <span className="font-mono font-bold text-stone-800">{activePin}</span>. Anda dapat menggantinya dengan 6 angka rahasia baru.
+                  PIN saat ini: <span className="font-mono font-bold text-stone-900">{activePin}</span>. Anda dapat menggantinya dengan 6 angka rahasia baru.
                 </p>
               </div>
             </div>
@@ -1090,7 +1082,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     value={newPin}
                     onChange={(e) => setNewPin(e.target.value)}
                     placeholder="Contoh: 123456"
-                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-center text-lg tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-center text-lg tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   />
                 </div>
 
@@ -1105,7 +1097,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     value={confirmPin}
                     onChange={(e) => setConfirmPin(e.target.value)}
                     placeholder="Ketik ulang PIN..."
-                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-center text-lg tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-center text-lg tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   />
                 </div>
               </div>
@@ -1118,7 +1110,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
 
               <button
                 type="submit"
-                className="cursor-pointer bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-md transition-all"
+                className="cursor-pointer bg-stone-900 hover:bg-emerald-900 active:scale-95 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-md transition-all"
               >
                 Simpan PIN Baru
               </button>
@@ -1128,8 +1120,8 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           {/* Card 2: Backup & Restore */}
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-stone-200 shadow-sm space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
-                <Download className="w-5 h-5 text-blue-600" />
+              <div className="w-10 h-10 rounded-2xl bg-stone-100 text-stone-900 flex items-center justify-center">
+                <Download className="w-5 h-5 text-stone-800" />
               </div>
               <div>
                 <h3 className="text-lg font-black text-stone-900">Cadangan & Pemulihan Data (Backup JSON)</h3>
@@ -1152,7 +1144,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 <Upload className="w-4 h-4" />
                 <span>Pulihkan dari File (.JSON)</span>
                 <input
-                  ref={fileInputRef}
+                  ref={backupFileInputRef}
                   type="file"
                   accept=".json"
                   onChange={handleImportBackup}
@@ -1169,11 +1161,11 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
               <span>Reset ke Pengaturan Awal Pabrik</span>
             </div>
             <p className="text-xs text-red-700 leading-relaxed">
-              Jika Anda ingin mengembalikan seluruh menu ke menu unggulan default awal Jajanan Kakang (Pempek, Cireng, Otak-otak, dsb).
+              Jika Anda ingin mengembalikan seluruh menu ke menu unggulan default awal Jajanan Kakang.
             </p>
             <button
               onClick={handleRestoreDefaults}
-              className="cursor-pointer bg-red-600 hover:bg-red-700 active:scale-95 text-white font-extrabold text-xs py-2.5 px-4 rounded-xl shadow-md transition-all inline-flex items-center gap-1.5"
+              className="cursor-pointer bg-red-700 hover:bg-red-800 active:scale-95 text-white font-extrabold text-xs py-2.5 px-4 rounded-xl shadow-md transition-all inline-flex items-center gap-1.5"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Kembalikan ke Menu Bawaan</span>
@@ -1186,16 +1178,16 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
       {/* MODAL: ADD / EDIT MENU                                         */}
       {/* ------------------------------------------------------------- */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/70 backdrop-blur-xs animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/75 backdrop-blur-xs animate-fade-in">
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
-            <div className="p-5 bg-gradient-to-r from-amber-600 to-orange-600 text-white flex items-center justify-between">
+            <div className="p-5 bg-gradient-to-r from-stone-900 to-emerald-950 text-white flex items-center justify-between border-b border-emerald-900/40">
               <div className="flex items-center gap-2 font-black text-base sm:text-lg">
-                <Edit2 className="w-5 h-5" />
+                <Edit2 className="w-5 h-5 text-emerald-400" />
                 <span>{editingItem ? 'Edit Menu' : 'Tambah Menu Baru'}</span>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="cursor-pointer w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white"
+                className="cursor-pointer w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1211,9 +1203,27 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Contoh: Pempek Kapal Selam Jumbo"
-                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="Contoh: Cireng Bumbu Rujak Salju"
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-600"
                 />
+              </div>
+
+              {/* Category Dropdown (Requested by user) */}
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Kategori Menu (Pilih Salah Satu)
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer"
+                >
+                  {SELLER_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1228,7 +1238,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                       step={500}
                       value={formData.price}
                       onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
-                      className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-600"
                     />
                   </div>
                 </div>
@@ -1239,25 +1249,25 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     type="text"
                     value={formData.portion}
                     onChange={(e) => setFormData({ ...formData, portion: e.target.value })}
-                    placeholder="Contoh: 1 Porsi, 10 Pcs, Cup 22oz"
-                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="Contoh: 1 Porsi (10 Pcs), Cup 22oz"
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">Kategori</label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="Camilan & Gorengan">Camilan & Gorengan</option>
-                    <option value="Makanan Utama">Makanan Utama</option>
-                    <option value="Minuman Segar">Minuman Segar</option>
-                    <option value="Paket Hemat">Paket Hemat</option>
-                  </select>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Badge / Tag Khusus</label>
+                  <div className="relative">
+                    <Tag className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
+                    <input
+                      type="text"
+                      value={formData.badge}
+                      onChange={(e) => setFormData({ ...formData, badge: e.target.value })}
+                      placeholder="Best Seller, Favorit, dll"
+                      className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -1265,7 +1275,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   <select
                     value={formData.spicyLevel}
                     onChange={(e) => setFormData({ ...formData, spicyLevel: Number(e.target.value) })}
-                    className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   >
                     <option value={0}>Tidak Pedas (Manis / Gurih)</option>
                     <option value={1}>🌶️ Level 1 (Sedang)</option>
@@ -1276,85 +1286,103 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">Badge Khusus / Label</label>
-                <div className="relative">
-                  <Tag className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    value={formData.badge}
-                    onChange={(e) => setFormData({ ...formData, badge: e.target.value })}
-                    placeholder="Contoh: Best Seller, Favorit, Rekomendasi, Promo, Spesial"
-                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1">Deskripsi Menu</label>
                 <textarea
                   rows={2}
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Rincian kelezatan, bumbu pelengkap, dan keistimewaan rasa..."
-                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 leading-relaxed"
+                  placeholder="Rincian kelezatan rasa, bumbu pelengkap, dan keistimewaan..."
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600 leading-relaxed"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">URL Foto Makanan</label>
-                <div className="relative">
-                  <ImageIcon className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
-                  <input
-                    type="url"
-                    value={formData.imageUrl}
-                    onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                    placeholder="https://images.unsplash.com/..."
-                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
+              {/* FITUR UPLOAD FOTO DARI GALERI / FILE (Requested by user) */}
+              <div className="space-y-2 pt-1 border-t border-stone-100">
+                <label className="block text-xs font-bold text-stone-800">
+                  Foto Makanan / Minuman
+                </label>
+
+                {/* Hidden File Input for mobile and desktop gallery */}
+                <input
+                  ref={imageFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageFileChange}
+                  className="hidden"
+                />
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => imageFileInputRef.current?.click()}
+                    disabled={isCompressingImage}
+                    className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-extrabold bg-stone-900 hover:bg-emerald-900 active:scale-95 text-white shadow-sm transition-all"
+                  >
+                    <FolderOpen className="w-4 h-4 text-emerald-400" />
+                    <span>
+                      {isCompressingImage ? 'Memproses Foto...' : '📁 Pilih Foto dari Galeri / HP'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowUrlInput(!showUrlInput)}
+                    className="cursor-pointer text-xs font-semibold text-stone-600 hover:text-stone-900 px-3 py-2 rounded-xl hover:bg-stone-100 transition-colors"
+                  >
+                    {showUrlInput ? 'Tutup URL' : 'Gunakan URL Foto'}
+                  </button>
+
+                  {formData.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, imageUrl: '' })}
+                      className="cursor-pointer text-xs font-semibold text-red-600 hover:text-red-700 px-3 py-2 rounded-xl hover:bg-red-50"
+                    >
+                      Hapus Foto
+                    </button>
+                  )}
                 </div>
 
-                {/* Quick Curated Presets */}
-                <div className="mt-2.5">
-                  <div className="text-[10px] text-stone-400 font-bold mb-1">
-                    Atau gunakan foto kuliner cepat:
+                {/* Optional manual URL input */}
+                {showUrlInput && (
+                  <div className="relative mt-2">
+                    <ImageIcon className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
+                    <input
+                      type="url"
+                      value={formData.imageUrl}
+                      onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                      placeholder="https://..."
+                      className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                    />
                   </div>
-                  <div className="flex gap-1.5 overflow-x-auto pb-1">
-                    {presetPhotos.map((preset) => (
-                      <button
-                        key={preset.title}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, imageUrl: preset.url })}
-                        className="cursor-pointer shrink-0 text-[10px] bg-stone-100 hover:bg-amber-100 text-stone-700 px-2.5 py-1 rounded-xl border border-stone-200 font-medium"
-                      >
-                        {preset.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                )}
 
-                {/* Live Preview */}
-                {formData.imageUrl && (
-                  <div className="mt-2.5 rounded-2xl overflow-hidden h-32 bg-stone-100 border border-stone-200">
+                {/* Live Image Preview (Requested by user) */}
+                {formData.imageUrl ? (
+                  <div className="mt-3 relative rounded-2xl overflow-hidden h-36 bg-stone-100 border border-stone-200 shadow-inner">
                     <img
                       src={formData.imageUrl}
-                      alt="Preview"
+                      alt="Pratinjau Foto"
                       className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src =
-                          'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
-                      }}
                     />
+                    <div className="absolute bottom-2 right-2 bg-stone-900/80 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
+                      <span>✓ Foto Siap Digunakan</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2 p-4 border-2 border-dashed border-stone-200 rounded-2xl text-center text-xs text-stone-400 bg-stone-50/50">
+                    Belum ada foto yang dipilih. Ketuk <strong>"📁 Pilih Foto dari Galeri / HP"</strong> untuk mengambil dari galeri atau kamera Anda.
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex items-center gap-2 pt-2">
                 <input
                   type="checkbox"
                   id="modalIsAvailable"
                   checked={formData.isAvailable}
                   onChange={(e) => setFormData({ ...formData, isAvailable: e.target.checked })}
-                  className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
+                  className="w-4 h-4 rounded text-emerald-700 focus:ring-emerald-600"
                 />
                 <label htmlFor="modalIsAvailable" className="text-xs font-bold text-stone-800">
                   Stok Tersedia (Aktif untuk Dipesan Pembeli)
@@ -1372,7 +1400,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="cursor-pointer bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white text-xs font-bold px-6 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-1.5"
+                  className="cursor-pointer bg-stone-900 hover:bg-emerald-900 text-white text-xs font-bold px-6 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-1.5"
                 >
                   <Save className="w-4 h-4" />
                   <span>{isSubmitting ? 'Menyimpan...' : 'Simpan Menu'}</span>

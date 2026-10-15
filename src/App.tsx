@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { MenuItem, ShopInfo, CartItem } from './types';
+import { MenuItem, ShopInfo, CartItem, MENU_CATEGORIES } from './types';
 import {
   DEFAULT_SHOP_INFO,
   DEFAULT_MENU_ITEMS,
@@ -42,9 +42,9 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState<string>('Baru saja');
   const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
 
-  // Buyer Filtering & Search
+  // Buyer Filtering & Search (Default: Semua Menu)
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('Semua');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Semua Menu');
 
   // Buyer Cart
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -149,12 +149,8 @@ export default function App() {
 
   // Derived Category List
   const categories = useMemo(() => {
-    const set = new Set<string>();
-    menuItems.forEach((item) => {
-      if (item.category) set.add(item.category);
-    });
-    return ['Semua', ...Array.from(set)];
-  }, [menuItems]);
+    return Array.from(MENU_CATEGORIES);
+  }, []);
 
   // Filtered Menu Items for Buyer View
   const filteredMenuItems = useMemo(() => {
@@ -164,8 +160,8 @@ export default function App() {
         item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.category.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesCategory =
-        selectedCategory === 'Semua' || item.category === selectedCategory;
+      const isAll = selectedCategory === 'Semua Menu' || selectedCategory === 'Semua';
+      const matchesCategory = isAll || item.category === selectedCategory;
 
       return matchesSearch && matchesCategory;
     });
@@ -315,14 +311,14 @@ export default function App() {
             {/* Menu Catalog Grid */}
             {isLoading ? (
               <div className="text-center py-16 space-y-3">
-                <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                <div className="w-10 h-10 border-4 border-emerald-700 border-t-transparent rounded-full animate-spin mx-auto" />
                 <p className="text-sm font-semibold text-stone-600">
                   Mengambil menu terlezat dari Cloud Database...
                 </p>
               </div>
             ) : filteredMenuItems.length === 0 ? (
               <div className="bg-white rounded-3xl p-10 text-center border border-stone-200/80 shadow-xs space-y-3">
-                <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-3xl">
+                <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center text-3xl">
                   🥣
                 </div>
                 <h3 className="font-bold text-lg text-stone-800">Menu Tidak Ditemukan</h3>
@@ -332,9 +328,9 @@ export default function App() {
                 <button
                   onClick={() => {
                     setSearchQuery('');
-                    setSelectedCategory('Semua');
+                    setSelectedCategory('Semua Menu');
                   }}
-                  className="cursor-pointer text-xs font-bold text-amber-600 hover:text-amber-700 underline"
+                  className="cursor-pointer text-xs font-bold text-emerald-700 hover:text-emerald-800 underline"
                 >
                   Tampilkan Semua Menu
                 </button>
